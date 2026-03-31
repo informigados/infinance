@@ -1,5 +1,6 @@
 import unittest
 import contextlib
+import hashlib
 import os
 import re
 import secrets
@@ -93,13 +94,33 @@ class AuthAndCalculationsTest(unittest.TestCase):
     PERCENTAGE_VALUE_PATTERN = r'-?\d+(?:[.,]\d+)?%'
 
     @classmethod
+    def _resolve_test_password(cls, env_var_name: str, identity: str) -> str:
+        """
+        Resolve a stable test password.
+
+        Priority:
+        1) explicit environment variable value;
+        2) deterministic value derived from the app secret key and identity.
+
+        This keeps test credentials repeatable across runs (including with
+        persistent databases) without hardcoding reusable plain-text passwords.
+        """
+        explicit = (os.getenv(env_var_name) or '').strip()
+        if explicit:
+            return explicit
+
+        seed = str(app.config.get('SECRET_KEY', 'infinance-test-fallback-secret'))
+        digest = hashlib.sha256(f'{seed}:{identity}'.encode('utf-8')).hexdigest()
+        return f'TestAuth!{digest[:24]}'
+
+    @classmethod
     def setUpClass(cls):
         app.config.update(TESTING=True)
         bootstrap_database()
         cls.username = 'qa_auth_user'
-        cls.password = os.getenv('INFINANCE_TEST_USER_PASSWORD') or f'TestAuth!{secrets.token_hex(8)}'
+        cls.password = cls._resolve_test_password('INFINANCE_TEST_USER_PASSWORD', cls.username)
         cls.admin_username = 'qa_auth_admin'
-        cls.admin_password = os.getenv('INFINANCE_TEST_ADMIN_PASSWORD') or f'TestAdmin!{secrets.token_hex(8)}'
+        cls.admin_password = cls._resolve_test_password('INFINANCE_TEST_ADMIN_PASSWORD', cls.admin_username)
         with app.app_context():
             existing = get_user_by_username(cls.username)
             if existing is None:
@@ -273,6 +294,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
         context: str | None = None,
     ) -> None:
         """
+        Internal helper for this test class.
+
         Validate transaction result values against NaN/finite invariants.
 
         :param result_dict: Output dictionary from `calculate_transaction`.
@@ -290,6 +313,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
 
     def _count_clients_by_name(self, db, name: str) -> int:
         """
+        Internal helper for this test class.
+
         Count client rows by exact name.
 
         :param db: Active SQLite connection used by tests.
