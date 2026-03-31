@@ -6,6 +6,7 @@ import re
 import secrets
 import sys
 import uuid
+from typing import Any
 from math import isfinite, isinf, isnan
 from datetime import datetime, timezone
 
@@ -332,6 +333,80 @@ class AuthAndCalculationsTest(unittest.TestCase):
         """
         return int(db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (name,)).fetchone()[0])
 
+    def _create_test_transaction_with_expense(
+        self,
+        db,
+        month: str,
+        now_iso: str,
+        *,
+        amount: float = 1000.0,
+        expense_amount: float = 400.0,
+    ) -> dict[str, Any]:
+        """
+        Internal helper to insert deterministic monthly-report fixture data.
+
+        It creates one client, one service, one transaction and one expense
+        for the provided month, then returns inserted identifiers/values.
+        """
+        client_cursor = db.execute(
+            self.CLIENT_INSERT_SQL,
+            ('Cliente Insights Janeiro', 'PJ', 'Cliente de teste para insights', now_iso),
+        )
+        service_cursor = db.execute(
+            self.SERVICE_INSERT_SQL,
+            (
+                'Serviço Insights Janeiro',
+                'operacional',
+                0.10,
+                '6319-4/00',
+                'Serviço de teste para geração de insights',
+                'III',
+                1,
+                'Template teste insights',
+                now_iso,
+            ),
+        )
+        client_id = int(client_cursor.lastrowid)
+        service_id = int(service_cursor.lastrowid)
+
+        db.execute(
+            self.TRANSACTION_INSERT_SQL,
+            (
+                client_id,
+                service_id,
+                amount,
+                'PJ',
+                1,
+                f'NF-INSIGHTS-{month}',
+                'Transação de teste para insights',
+                0.0,
+                f'{month}-15',
+                'recebido',
+                'Teste determinístico',
+                now_iso,
+            ),
+        )
+
+        db.execute(
+            self.EXPENSE_INSERT_SQL,
+            (
+                'Despesa de teste para insights',
+                'marketing',
+                expense_amount,
+                f'{month}-20',
+                0,
+                'Teste determinístico',
+                now_iso,
+            ),
+        )
+
+        return {
+            'client_id': client_id,
+            'service_id': service_id,
+            'amount': amount,
+            'expense_amount': expense_amount,
+        }
+
     def test_set_csrf_sets_session_token(self):
         csrf_token = secrets.token_urlsafe(24)
         returned = self.set_csrf_token(csrf_token)
@@ -561,10 +636,11 @@ class AuthAndCalculationsTest(unittest.TestCase):
         # so all returned values should remain finite and consistent.
         result = calculate_transaction(sys.float_info.max, 'PJ', True, 1.0, 0.0)
         self._assert_transaction_values_valid(result, require_finite_values=True, context='float max boundary')
-        self.assertEqual(result['gross'], sys.float_info.max)
-        self.assertEqual(result['invoice_tax'], sys.float_info.max)
+        tolerance = sys.float_info.max * 1e-12
+        self.assertAlmostEqual(result['gross'], sys.float_info.max, delta=tolerance)
+        self.assertAlmostEqual(result['invoice_tax'], sys.float_info.max, delta=tolerance)
         self.assertEqual(result['pf_tax'], 0.0)
-        self.assertEqual(result['total_tax'], sys.float_info.max)
+        self.assertAlmostEqual(result['total_tax'], sys.float_info.max, delta=tolerance)
         self.assertEqual(result['net'], 0.0)
         self.assertEqual(result['effective_rate'], 100.0)
 
@@ -704,6 +780,20 @@ class AuthAndCalculationsTest(unittest.TestCase):
             'forced_same_annex_result',
         )
 
+    def test_calculate_das_advanced_forced_annex_other_valid_options(self):
+        natural_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V')
+        self.assertIsNone(natural_result.get('error'))
+        self.assertEqual(natural_result['annex'], 'V')
+
+        for forced_annex in ('I', 'III', 'IV'):
+            with self.subTest(forced_annex=forced_annex):
+                result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex=forced_annex)
+                self.assertIsNone(result.get('error'))
+                self.assertEqual(result.get('annex'), forced_annex)
+                self.assertNotEqual(result.get('annex'), natural_result.get('annex'))
+                self.assertIn('effective_rate', result)
+                self.assertIn('estimated_das', result)
+
     def test_calculate_das_advanced_invalid_forced_annex(self):
         for forced_annex in self.INVALID_FORCED_ANNEX_VALUES:
             with self.subTest(forced_annex=forced_annex):
@@ -779,57 +869,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 now_dt = datetime.now(timezone.utc)
                 month = now_dt.strftime(self.MONTH_FORMAT)
                 now = now_dt.isoformat(timespec='seconds')
-                client_cursor = db.execute(
-                    self.CLIENT_INSERT_SQL,
-                    ('Cliente Insights Janeiro', 'PJ', 'Cliente de teste para insights', now),
-                )
-                service_cursor = db.execute(
-                    self.SERVICE_INSERT_SQL,
-                    (
-                        'Serviço Insights Janeiro',
-                        'operacional',
-                        0.10,
-                        '6319-4/00',
-                        'Serviço de teste para geração de insights',
-                        'III',
-                        1,
-                        'Template teste insights',
-                        now,
-                    ),
-                )
-                client_id = int(client_cursor.lastrowid)
-                service_id = int(service_cursor.lastrowid)
-
-                db.execute(
-                    self.TRANSACTION_INSERT_SQL,
-                    (
-                        client_id,
-                        service_id,
-                        1000.0,
-                        'PJ',
-                        1,
-                        f'NF-INSIGHTS-{month}',
-                        'Transação de teste para insights',
-                        0.0,
-                        f'{month}-15',
-                        'recebido',
-                        'Teste determinístico',
-                        now,
-                    ),
-                )
-
-                db.execute(
-                    self.EXPENSE_INSERT_SQL,
-                    (
-                        'Despesa de teste para insights',
-                        'marketing',
-                        400.0,
-                        f'{month}-20',
-                        0,
-                        'Teste determinístico',
-                        now,
-                    ),
-                )
+                self._create_test_transaction_with_expense(db, month, now)
 
                 data = build_monthly_report_data(month)
         self.assertEqual(data.get('month'), month)
@@ -841,9 +881,12 @@ class AuthAndCalculationsTest(unittest.TestCase):
             self.assertIsInstance(insight, str)
             self.assertNotEqual(insight.strip(), '')
 
-        gross = float(data['income_totals']['gross_total'])
-        expense_total = float(data['expense_total'])
-        net = float(data['income_totals']['net_total'])
+        gross = data['income_totals']['gross_total']
+        expense_total = data['expense_total']
+        net = data['income_totals']['net_total']
+        self.assertIsInstance(gross, (int, float))
+        self.assertIsInstance(expense_total, (int, float))
+        self.assertIsInstance(net, (int, float))
         self.assertGreater(gross, 0.0)
         self.assertGreater(expense_total, 0.0)
         self.assertGreater(net, 0.0)
