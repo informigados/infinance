@@ -21,6 +21,8 @@ from werkzeug.security import generate_password_hash
 
 class AuthAndCalculationsTest(unittest.TestCase):
     # This keeps the margin insight test consistent without coupling to every textual detail.
+    # NOTE: [.,] intentionally accepts both comma and period as decimal separators
+    # to tolerate locale-dependent formatting in test output.
     MARGIN_INSIGHT_PATTERN = r'^Margem operacional estimada: -?\d+(?:[.,]\d+)?% sobre a receita bruta do período\.$'
     PERCENTAGE_VALUE_PATTERN = r'-?\d+(?:[.,]\d+)?%'
 
@@ -54,13 +56,18 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.client = app.test_client()
 
     @contextlib.contextmanager
-    def savepoint(self, db, name: str):
+    def savepoint(self, db, name: str, rollback_on_success: bool = False):
         safe_name = self._validate_savepoint_name(name)
         db.execute(self._build_savepoint_sql('SAVEPOINT', safe_name))
+        should_rollback = rollback_on_success
         try:
             yield
+        except Exception:
+            should_rollback = True
+            raise
         finally:
-            db.execute(self._build_savepoint_sql('ROLLBACK TO SAVEPOINT', safe_name))
+            if should_rollback:
+                db.execute(self._build_savepoint_sql('ROLLBACK TO SAVEPOINT', safe_name))
             db.execute(self._build_savepoint_sql('RELEASE SAVEPOINT', safe_name))
 
     @staticmethod
@@ -311,6 +318,15 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertEqual(result['net'], 0.0)
         self.assertEqual(result['effective_rate'], 100.0)
 
+        # Scenario 2: overflow-prone multiplication (gross * rate > float max).
+        # Here we assert the implementation doesn't return NaN values.
+        overflowing_gross = sys.float_info.max * 0.75
+        overflow_result = calculate_transaction(overflowing_gross, 'PJ', True, 1.5, 0.0)
+        for key in ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate'):
+            value = overflow_result[key]
+            self.assertFalse(isnan(value), msg=f'{key} should not be NaN when overflow would occur')
+        self.assertEqual(overflow_result['gross'], overflowing_gross)
+
     def test_calculate_transaction_positive_gross_negative_tax_rate(self):
         result = calculate_transaction(1000.0, 'PJ', True, -0.1, 0.0)
         self.assertEqual(result['gross'], 1000.0)
@@ -389,6 +405,41 @@ class AuthAndCalculationsTest(unittest.TestCase):
                     msg=f"Value for key '{key}' in forced_annex_result does not match baseline value",
                 )
 
+    def test_calculate_das_advanced_forced_same_annex_as_natural(self):
+        natural_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V')
+        self.assertIsNone(natural_result.get('error'))
+        self.assertEqual(natural_result['annex'], 'V')
+
+        forced_same_annex_result = calculate_das_advanced(
+            10_000.0,
+            200_000.0,
+            20_000.0,
+            'III_V',
+            forced_annex='V',
+        )
+        self.assertIsNone(forced_same_annex_result.get('error'))
+        self.assertEqual(forced_same_annex_result['annex'], 'V')
+
+        for key, natural_value in natural_result.items():
+            if key in {'error', 'annex', 'uses_factor_r', 'annex_mode'}:
+                continue
+            self.assertIn(key, forced_same_annex_result, msg=f"Missing key '{key}' in forced_same_annex_result")
+            forced_value = forced_same_annex_result[key]
+            if isinstance(natural_value, (int, float)):
+                self.assertIsInstance(
+                    forced_value,
+                    (int, float),
+                    msg=f"Value for key '{key}' in forced_same_annex_result is not numeric as expected",
+                )
+                self.assertAlmostEqual(forced_value, natural_value, places=6)
+            else:
+                self.assertIsInstance(forced_value, type(natural_value))
+                self.assertEqual(
+                    forced_value,
+                    natural_value,
+                    msg=f"Value for key '{key}' in forced_same_annex_result does not match natural value",
+                )
+
     def test_calculate_das_advanced_invalid_forced_annex(self):
         for forced_annex in ['INVALID', 'VI']:
             with self.subTest(forced_annex=forced_annex):
@@ -400,7 +451,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         month = '2099-01'
         with app.app_context():
             db = get_db()
-            with self.savepoint(db, 'monthly_insights_test'):
+            with self.savepoint(db, 'monthly_insights_test', rollback_on_success=True):
                 now = datetime.now(timezone.utc).isoformat(timespec='seconds')
                 client_cursor = db.execute(
                     'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
@@ -490,7 +541,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertRegex(third_insight, self.PERCENTAGE_VALUE_PATTERN)
         self.assertIn('receita bruta', third_insight)
 
-    def test_monthly_insights_savepoint_rollback_behavior(self):
+    def test_savepoint_context_manager_rollback(self):
         with app.app_context():
             db = get_db()
             marker = f'Cliente_Savepoint_Rollback_{uuid.uuid4()}'
