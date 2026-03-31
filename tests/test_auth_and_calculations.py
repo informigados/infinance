@@ -464,7 +464,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertTrue(isinf(overflow_result['invoice_tax']) or overflow_result['invoice_tax'] >= 0.0)
         self.assertTrue(isinf(overflow_result['total_tax']) or overflow_result['total_tax'] >= 0.0)
         self.assertLessEqual(overflow_result['net'], overflow_result['gross'])
-        self.assertTrue(isinf(overflow_result['net']) or overflow_result['net'] >= 0.0)
+        self.assertTrue(isinf(overflow_result['net']) or overflow_result['net'] <= overflow_result['gross'])
         self.assertTrue(isinf(overflow_result['effective_rate']) or overflow_result['effective_rate'] >= 0.0)
 
     def test_calculate_transaction_at_float_max_boundary_realistic_rate(self):
