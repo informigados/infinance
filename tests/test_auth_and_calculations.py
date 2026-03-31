@@ -322,9 +322,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertTrue(isfinite(result['net']))
         self.assertTrue(isfinite(result['effective_rate']))
         expected_invoice_tax = gross * invoice_rate
-        # Business rule: PF (personal) tax applies only to PF-channel transactions.
-        # For PJ-channel transactions that issue an invoice, only invoice tax applies,
-        # therefore PF tax is explicitly zero in this scenario.
+        # In this test scenario (PJ with invoice), PF tax is expected to be zero.
         expected_pf_tax = 0.0
         expected_total_tax = expected_invoice_tax + expected_pf_tax
         expected_net = gross - expected_total_tax
@@ -481,6 +479,15 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex=forced_annex)
                 self.assertIsNotNone(result.get('error'))
                 self.assertEqual(result.get('error'), 'Anexo forçado inválido. Use I, II, III, IV ou V.')
+                # Invalid forced annex must short-circuit and avoid calculation payload fields.
+                for key in (
+                    'annex',
+                    'nominal_rate',
+                    'effective_rate',
+                    'estimated_das',
+                    'factor_r',
+                ):
+                    self.assertNotIn(key, result)
 
     def test_calculate_das_advanced_none_forced_annex_is_allowed(self):
         result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex=None)
