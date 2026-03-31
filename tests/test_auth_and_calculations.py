@@ -1,4 +1,5 @@
 import unittest
+import contextlib
 from math import isfinite
 from datetime import datetime, timezone
 
@@ -17,8 +18,8 @@ from werkzeug.security import generate_password_hash
 
 class AuthAndCalculationsTest(unittest.TestCase):
     # Keeps the margin insight test consistent without coupling to every textual detail.
-    MARGIN_INSIGHT_PATTERN = r'^Margem operacional estimada: -?\d+(?:\.\d+)?% sobre a receita bruta do período\.$'
-    PERCENTAGE_VALUE_PATTERN = r'-?\d+(?:\.\d+)?%'
+    MARGIN_INSIGHT_PATTERN = r'^Margem operacional estimada: -?\d+(?:[.,]\d+)?% sobre a receita bruta do período\.$'
+    PERCENTAGE_VALUE_PATTERN = r'-?\d+(?:[.,]\d+)?%'
 
     @classmethod
     def setUpClass(cls):
@@ -48,6 +49,15 @@ class AuthAndCalculationsTest(unittest.TestCase):
 
     def setUp(self):
         self.client = app.test_client()
+
+    @contextlib.contextmanager
+    def savepoint(self, db, name: str):
+        db.execute(f'SAVEPOINT {name}')
+        try:
+            yield
+        finally:
+            db.execute(f'ROLLBACK TO SAVEPOINT {name}')
+            db.execute(f'RELEASE SAVEPOINT {name}')
 
     def set_csrf(self, token: str = 'test-csrf-auth') -> str:
         with self.client.session_transaction() as sess:
@@ -237,11 +247,18 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertTrue(isfinite(result['total_tax']))
         self.assertTrue(isfinite(result['net']))
         self.assertTrue(isfinite(result['effective_rate']))
+        expected_invoice_tax = gross * invoice_rate
+        expected_pf_tax = 0.0
+        expected_total_tax = expected_invoice_tax + expected_pf_tax
+        expected_net = gross - expected_total_tax
+        expected_effective_rate = (expected_total_tax / gross) * 100
+
         self.assertEqual(result['gross'], gross)
-        self.assertAlmostEqual(result['invoice_tax'], gross * invoice_rate, places=2)
-        self.assertAlmostEqual(result['total_tax'], result['invoice_tax'] + result['pf_tax'], places=2)
-        self.assertAlmostEqual(result['net'], result['gross'] - result['total_tax'], places=2)
-        self.assertAlmostEqual(result['effective_rate'], (result['total_tax'] / gross) * 100, places=2)
+        self.assertAlmostEqual(result['invoice_tax'], expected_invoice_tax, places=2)
+        self.assertAlmostEqual(result['pf_tax'], expected_pf_tax, places=2)
+        self.assertAlmostEqual(result['total_tax'], expected_total_tax, places=2)
+        self.assertAlmostEqual(result['net'], expected_net, places=2)
+        self.assertAlmostEqual(result['effective_rate'], expected_effective_rate, places=2)
 
     def test_calculate_das_advanced_zero_revenue(self):
         zero_revenue_result = calculate_das_advanced(5000.0, 0.0, 1000.0, 'III_V')
@@ -294,15 +311,14 @@ class AuthAndCalculationsTest(unittest.TestCase):
         for forced_annex in ['INVALID', 'VI']:
             with self.subTest(forced_annex=forced_annex):
                 result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex=forced_annex)
-                self.assertIsNone(result.get('error'))
-                self.assertIn(result['annex'], {'III', 'V'})
+                self.assertIsNotNone(result.get('error'))
+                self.assertEqual(result.get('error'), 'Anexo forçado inválido. Use I, II, III, IV ou V.')
 
     def test_build_monthly_report_data_includes_insights(self):
         month = '2099-01'
         with app.app_context():
             db = get_db()
-            db.execute('SAVEPOINT monthly_insights_test')
-            try:
+            with self.savepoint(db, 'monthly_insights_test'):
                 now = datetime.now(timezone.utc).isoformat(timespec='seconds')
                 client_cursor = db.execute(
                     'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
@@ -363,9 +379,6 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 )
 
                 data = build_monthly_report_data(month)
-            finally:
-                db.execute('ROLLBACK TO SAVEPOINT monthly_insights_test')
-                db.execute('RELEASE SAVEPOINT monthly_insights_test')
         self.assertEqual(data.get('month'), month)
         self.assertIn('insights', data)
         self.assertIsInstance(data['insights'], list)
@@ -402,21 +415,16 @@ class AuthAndCalculationsTest(unittest.TestCase):
             pre_existing = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
             self.assertEqual(pre_existing, 0)
 
-            db.execute('SAVEPOINT monthly_insights_rollback_test')
-            try:
-                now = datetime.now(timezone.utc).isoformat(timespec='seconds')
-                db.execute(
-                    'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
-                    (marker, 'PJ', 'Cliente temporário para testar rollback de savepoint', now),
-                )
-                in_savepoint_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
-                self.assertEqual(in_savepoint_count, 1)
-                raise RuntimeError('force rollback scenario')
-            except RuntimeError:
-                pass
-            finally:
-                db.execute('ROLLBACK TO SAVEPOINT monthly_insights_rollback_test')
-                db.execute('RELEASE SAVEPOINT monthly_insights_rollback_test')
+            with self.assertRaises(RuntimeError):
+                with self.savepoint(db, 'monthly_insights_rollback_test'):
+                    now = datetime.now(timezone.utc).isoformat(timespec='seconds')
+                    db.execute(
+                        'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
+                        (marker, 'PJ', 'Cliente temporário para testar rollback de savepoint', now),
+                    )
+                    in_savepoint_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
+                    self.assertEqual(in_savepoint_count, 1)
+                    raise RuntimeError('force rollback scenario')
 
             post_rollback_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
             self.assertEqual(post_rollback_count, 0)

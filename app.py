@@ -796,6 +796,11 @@ def calculate_das_advanced(
             'error': 'RBT12 acima de R$ 4.800.000,00. O cálculo simplificado aqui não cobre esse regime.',
         }
 
+    if forced_annex is not None and forced_annex not in DAS_BRACKETS:
+        return {
+            'error': 'Anexo forçado inválido. Use I, II, III, IV ou V.',
+        }
+
     factor_r = payroll_12m / rbt12
     annex_mode = parse_annex(annex_mode, 'III_V')
 
