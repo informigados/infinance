@@ -120,6 +120,7 @@ CLIENTS_PER_PAGE = 12
 SERVICES_PER_PAGE = 12
 TRANSACTIONS_PER_PAGE = 20
 EXPENSES_PER_PAGE = 20
+CSRF_EXPIRED_MESSAGE = 'Sua sessão expirou ou o formulário está desatualizado. Recarregue a página e tente novamente.'
 
 
 def resolve_secret_key() -> str:
@@ -1262,7 +1263,7 @@ def verify_csrf() -> Response | None:
     expected = session.get('_csrf_token')
     provided = request.form.get('_csrf_token') or request.headers.get('X-CSRF-Token')
     if not expected or not provided or not secrets.compare_digest(expected, provided):
-        flash('Sua sessão expirou ou o formulário está desatualizado. Recarregue a página e tente novamente.', 'error')
+        flash(CSRF_EXPIRED_MESSAGE, 'error')
         if request.endpoint == 'login':
             return redirect(url_for('login'))
         return redirect(url_for('dashboard'))

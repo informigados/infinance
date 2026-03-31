@@ -7,6 +7,7 @@ from math import isfinite, isinf, isnan
 from datetime import datetime, timezone
 
 from app import (
+    CSRF_EXPIRED_MESSAGE as APP_CSRF_EXPIRED_MESSAGE,
     app,
     bootstrap_database,
     build_monthly_report_data,
@@ -20,16 +21,31 @@ from werkzeug.security import generate_password_hash
 
 
 class AuthAndCalculationsTest(unittest.TestCase):
-    CSRF_EXPIRED_MESSAGE = (
-        'sua sessão expirou ou o formulário está desatualizado. '
-        'recarregue a página e tente novamente.'
-    )
+    CSRF_EXPIRED_MESSAGE = APP_CSRF_EXPIRED_MESSAGE.casefold()
     MONTH_FORMAT = '%Y-%m'
     USER_INSERT_SQL = (
         'INSERT INTO users (username, password_hash, role, must_change_password, created_at) '
         'VALUES (?, ?, ?, 0, ?)'
     )
     USER_UPDATE_SQL = 'UPDATE users SET password_hash = ?, role = ?, must_change_password = 0 WHERE id = ?'
+    CLIENT_INSERT_SQL = 'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)'
+    SERVICE_INSERT_SQL = (
+        'INSERT INTO services ('
+        'name, service_type, tax_rate, cnae, cnae_description, annex, '
+        'factor_r_applicable, description_template, created_at'
+        ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    )
+    TRANSACTION_INSERT_SQL = (
+        'INSERT INTO transactions ('
+        'client_id, service_id, amount, channel, invoice_issued, invoice_number, '
+        'invoice_description, expected_pf_tax, date_received, status, notes, created_at'
+        ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    )
+    EXPENSE_INSERT_SQL = (
+        'INSERT INTO expenses ('
+        'description, category, amount, date_incurred, is_fixed, notes, created_at'
+        ') VALUES (?, ?, ?, ?, ?, ?, ?)'
+    )
     CALCULATION_RESULT_KEYS = (
         'annex',
         'nominal_rate',
@@ -249,6 +265,9 @@ class AuthAndCalculationsTest(unittest.TestCase):
             self.assertFalse(isnan(value), msg=f'{msg_prefix}{key} should not be NaN')
             if require_finite_values:
                 self.assertTrue(isfinite(value), msg=f'{msg_prefix}{key} should remain finite')
+
+    def _count_clients_by_name(self, db, name: str) -> int:
+        return int(db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (name,)).fetchone()[0])
 
     def test_set_csrf_sets_session_token(self):
         csrf_token = 'csrf-test-coverage'
@@ -684,13 +703,11 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 month = now_dt.strftime(self.MONTH_FORMAT)
                 now = now_dt.isoformat(timespec='seconds')
                 client_cursor = db.execute(
-                    'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
+                    self.CLIENT_INSERT_SQL,
                     ('Cliente Insights Janeiro', 'PJ', 'Cliente de teste para insights', now),
                 )
                 service_cursor = db.execute(
-                    '''INSERT INTO services (
-                           name, service_type, tax_rate, cnae, cnae_description, annex, factor_r_applicable, description_template, created_at
-                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    self.SERVICE_INSERT_SQL,
                     (
                         'Serviço Insights Janeiro',
                         'operacional',
@@ -707,10 +724,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 service_id = int(service_cursor.lastrowid)
 
                 db.execute(
-                    '''INSERT INTO transactions (
-                           client_id, service_id, amount, channel, invoice_issued, invoice_number, invoice_description,
-                           expected_pf_tax, date_received, status, notes, created_at
-                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    self.TRANSACTION_INSERT_SQL,
                     (
                         client_id,
                         service_id,
@@ -728,8 +742,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 )
 
                 db.execute(
-                    '''INSERT INTO expenses (description, category, amount, date_incurred, is_fixed, notes, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                    self.EXPENSE_INSERT_SQL,
                     (
                         'Despesa de teste para insights',
                         'marketing',
@@ -775,7 +788,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         with app.app_context():
             db = get_db()
             test_client_identifier = f'Cliente_Savepoint_Rollback_{uuid.uuid4()}'
-            pre_existing = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (test_client_identifier,)).fetchone()[0]
+            pre_existing = self._count_clients_by_name(db, test_client_identifier)
             self.assertEqual(pre_existing, 0)
 
             did_raise = False
@@ -783,10 +796,10 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 with self.savepoint(db, 'monthly_insights_rollback_test'):
                     now = datetime.now(timezone.utc).isoformat(timespec='seconds')
                     db.execute(
-                        'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
+                        self.CLIENT_INSERT_SQL,
                         (test_client_identifier, 'PJ', 'Cliente temporário para testar rollback de savepoint', now),
                     )
-                    in_savepoint_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (test_client_identifier,)).fetchone()[0]
+                    in_savepoint_count = self._count_clients_by_name(db, test_client_identifier)
                     self.assertEqual(in_savepoint_count, 1)
                     raise RuntimeError('force rollback scenario')
             except RuntimeError:
@@ -794,7 +807,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
 
             self.assertTrue(did_raise)
 
-            post_rollback_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (test_client_identifier,)).fetchone()[0]
+            post_rollback_count = self._count_clients_by_name(db, test_client_identifier)
             self.assertEqual(post_rollback_count, 0)
 
     def test_savepoint_context_manager_commit(self):
@@ -802,19 +815,19 @@ class AuthAndCalculationsTest(unittest.TestCase):
             db = get_db()
             test_client_identifier = f'Cliente_Savepoint_Commit_{uuid.uuid4()}'
             with self.savepoint(db, 'savepoint_commit_cleanup', rollback_on_success=True):
-                pre_existing = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (test_client_identifier,)).fetchone()[0]
+                pre_existing = self._count_clients_by_name(db, test_client_identifier)
                 self.assertEqual(pre_existing, 0)
 
                 with self.savepoint(db, 'monthly_insights_commit_test'):
                     now = datetime.now(timezone.utc).isoformat(timespec='seconds')
                     db.execute(
-                        'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
+                        self.CLIENT_INSERT_SQL,
                         (test_client_identifier, 'PJ', 'Cliente temporário para testar commit de savepoint', now),
                     )
-                    in_savepoint_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (test_client_identifier,)).fetchone()[0]
+                    in_savepoint_count = self._count_clients_by_name(db, test_client_identifier)
                     self.assertEqual(in_savepoint_count, 1)
 
-                post_commit_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (test_client_identifier,)).fetchone()[0]
+                post_commit_count = self._count_clients_by_name(db, test_client_identifier)
                 self.assertEqual(post_commit_count, 1)
 
 
