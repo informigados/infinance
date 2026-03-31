@@ -16,7 +16,7 @@ from werkzeug.security import generate_password_hash
 
 
 class AuthAndCalculationsTest(unittest.TestCase):
-    # Mantém o teste de insight de margem consistente sem acoplar a cada detalhe textual.
+    # Keeps the margin insight test consistent without coupling to every textual detail.
     MARGIN_INSIGHT_PATTERN = r'^Margem operacional estimada: -?\d+(?:\.\d+)?% sobre a receita bruta do período\.$'
     PERCENTAGE_VALUE_PATTERN = r'-?\d+(?:\.\d+)?%'
 
@@ -274,26 +274,33 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertTrue(low_factor_result['uses_factor_r'])
 
     def test_calculate_das_advanced_forced_annex(self):
+        baseline_annex_ii_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'II')
+        self.assertIsNone(baseline_annex_ii_result.get('error'))
+        self.assertEqual(baseline_annex_ii_result['annex'], 'II')
+
         forced_annex_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex='II')
         self.assertIsNone(forced_annex_result.get('error'))
         self.assertEqual(forced_annex_result['annex'], 'II')
         self.assertFalse(forced_annex_result['uses_factor_r'])
 
-    def test_calculate_das_advanced_invalid_forced_annex(self):
-        invalid_forced_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex='INVALID')
-        self.assertIsNone(invalid_forced_result.get('error'))
-        self.assertIn(invalid_forced_result['annex'], {'III', 'V'})
+        for key, baseline_value in baseline_annex_ii_result.items():
+            if key in {'error', 'annex', 'uses_factor_r'}:
+                continue
+            forced_value = forced_annex_result.get(key)
+            if isinstance(baseline_value, (int, float)) and isinstance(forced_value, (int, float)):
+                self.assertAlmostEqual(forced_value, baseline_value, places=6)
 
-        non_existent_forced_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex='VI')
-        self.assertIsNone(non_existent_forced_result.get('error'))
-        self.assertIn(non_existent_forced_result['annex'], {'III', 'V'})
+    def test_calculate_das_advanced_invalid_forced_annex(self):
+        for forced_annex in ['INVALID', 'VI']:
+            with self.subTest(forced_annex=forced_annex):
+                result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex=forced_annex)
+                self.assertIsNone(result.get('error'))
+                self.assertIn(result['annex'], {'III', 'V'})
 
     def test_build_monthly_report_data_includes_insights(self):
         month = '2099-01'
         with app.app_context():
             db = get_db()
-            month_start = '2099-01-01'
-            next_month_start = '2099-02-01'
             db.execute('SAVEPOINT monthly_insights_test')
             try:
                 now = datetime.now().isoformat(timespec='seconds')
@@ -387,6 +394,32 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertTrue(third_insight.startswith('Pressão tributária estimada: '))
         self.assertRegex(third_insight, self.PERCENTAGE_VALUE_PATTERN)
         self.assertIn('receita bruta', third_insight)
+
+    def test_monthly_insights_savepoint_rollback_behavior(self):
+        with app.app_context():
+            db = get_db()
+            marker = f'Cliente Savepoint Rollback {datetime.now().strftime("%Y%m%d%H%M%S%f")}'
+            pre_existing = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
+            self.assertEqual(pre_existing, 0)
+
+            db.execute('SAVEPOINT monthly_insights_rollback_test')
+            try:
+                now = datetime.now().isoformat(timespec='seconds')
+                db.execute(
+                    'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
+                    (marker, 'PJ', 'Cliente temporario para testar rollback de savepoint', now),
+                )
+                in_savepoint_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
+                self.assertEqual(in_savepoint_count, 1)
+                raise RuntimeError('force rollback scenario')
+            except RuntimeError:
+                pass
+            finally:
+                db.execute('ROLLBACK TO SAVEPOINT monthly_insights_rollback_test')
+                db.execute('RELEASE SAVEPOINT monthly_insights_rollback_test')
+
+            post_rollback_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
+            self.assertEqual(post_rollback_count, 0)
 
 
 if __name__ == '__main__':
