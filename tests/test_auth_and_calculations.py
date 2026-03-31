@@ -1,6 +1,8 @@
 import unittest
 import contextlib
 import re
+import sys
+import uuid
 from math import isfinite
 from datetime import datetime, timezone
 
@@ -54,12 +56,12 @@ class AuthAndCalculationsTest(unittest.TestCase):
     @contextlib.contextmanager
     def savepoint(self, db, name: str):
         safe_name = self._validate_savepoint_name(name)
-        db.execute(f'SAVEPOINT {safe_name}')
+        db.execute(self._build_savepoint_sql('SAVEPOINT', safe_name))
         try:
             yield
         finally:
-            db.execute(f'ROLLBACK TO SAVEPOINT {safe_name}')
-            db.execute(f'RELEASE SAVEPOINT {safe_name}')
+            db.execute(self._build_savepoint_sql('ROLLBACK TO SAVEPOINT', safe_name))
+            db.execute(self._build_savepoint_sql('RELEASE SAVEPOINT', safe_name))
 
     @staticmethod
     def _validate_savepoint_name(name: str) -> str:
@@ -68,6 +70,17 @@ class AuthAndCalculationsTest(unittest.TestCase):
         if re.fullmatch(r'[A-Za-z0-9_]+', name) is None:
             raise ValueError('Invalid savepoint name; only letters, digits, and underscores are allowed.')
         return name
+
+    @staticmethod
+    def _build_savepoint_sql(operation: str, name: str) -> str:
+        allowed_operations = (
+            'SAVEPOINT',
+            'ROLLBACK TO SAVEPOINT',
+            'RELEASE SAVEPOINT',
+        )
+        if operation not in allowed_operations:
+            raise ValueError('Unsupported savepoint operation.')
+        return f'{operation} {name}'
 
     def set_csrf(self, token: str = 'test-csrf-auth') -> str:
         with self.client.session_transaction() as sess:
@@ -270,6 +283,20 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertAlmostEqual(result['net'], expected_net, places=2)
         self.assertAlmostEqual(result['effective_rate'], expected_effective_rate, places=2)
 
+    def test_calculate_transaction_near_float_limits(self):
+        near_max = sys.float_info.max / 10.0
+        result = calculate_transaction(near_max, 'PJ', True, 0.5, 0.0)
+        self.assertTrue(isfinite(result['gross']))
+        self.assertTrue(isfinite(result['invoice_tax']))
+        self.assertTrue(isfinite(result['total_tax']))
+        self.assertTrue(isfinite(result['net']))
+        self.assertTrue(isfinite(result['effective_rate']))
+        self.assertGreater(result['gross'], 0.0)
+        self.assertGreater(result['invoice_tax'], 0.0)
+        self.assertEqual(result['total_tax'], result['invoice_tax'])
+        self.assertGreaterEqual(result['effective_rate'], 0.0)
+        self.assertLessEqual(result['effective_rate'], 100.0)
+
     def test_calculate_das_advanced_zero_revenue(self):
         result = calculate_das_advanced(5000.0, 0.0, 1000.0, 'III_V')
         error = result.get('error')
@@ -421,7 +448,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
     def test_monthly_insights_savepoint_rollback_behavior(self):
         with app.app_context():
             db = get_db()
-            marker = f'Cliente Savepoint Rollback {datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")}'
+            marker = f'Cliente Savepoint Rollback {uuid.uuid4()}'
             pre_existing = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
             self.assertEqual(pre_existing, 0)
 
