@@ -25,7 +25,6 @@ from werkzeug.security import generate_password_hash
 
 
 class AuthAndCalculationsTest(unittest.TestCase):
-    CSRF_EXPIRED_MESSAGE = APP_CSRF_EXPIRED_MESSAGE.casefold()
     MONTH_FORMAT = '%Y-%m'
     USER_INSERT_SQL = (
         'INSERT INTO users (username, password_hash, role, must_change_password, created_at) '
@@ -64,7 +63,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
     # Relative tolerance used for boundary comparisons near `sys.float_info.max`.
     # 1e-12 is strict enough to catch regressions while tolerating tiny FP noise.
     FLOAT_MAX_RELATIVE_TOLERANCE = 1e-12
-    EXCLUDED_COMPARISON_KEYS = {'error', 'annex', 'uses_factor_r'}
+    # Immutable by design to avoid accidental cross-test mutation.
+    EXCLUDED_COMPARISON_KEYS = frozenset({'error', 'annex', 'uses_factor_r'})
     TRANSACTION_RESULT_KEYS = ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate')
     VALID_FORCED_ANNEX_VALUES = ('I', 'II', 'III', 'IV', 'V')
     INVALID_FORCED_ANNEX_VALUES = (
@@ -92,8 +92,9 @@ class AuthAndCalculationsTest(unittest.TestCase):
     )
     # This keeps the test_build_monthly_report_data_includes_insights margin assertion
     # consistent without coupling to every textual detail.
-    # NOTE: [.,] intentionally accepts both comma and period as decimal separators
-    # to tolerate locale-dependent formatting in test output.
+    # NOTE: [.,] intentionally accepts both comma and period as decimal separators.
+    # During numeric assertions we normalize comma to dot while parsing, so locale
+    # differences in rendered text don't make the test flaky.
     MARGIN_INSIGHT_PREFIX_PATTERN = r'Margem operacional estimada:'
     MARGIN_INSIGHT_CONTEXT_PATTERN = r'sobre a receita bruta do período'
     MARGIN_INSIGHT_PATTERN = (
@@ -230,7 +231,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         baseline_result: dict,
         compared_result: dict,
         compared_name: str,
-        excluded_keys: set[str] | None = None,
+        excluded_keys: set[str] | frozenset[str] | None = None,
     ) -> None:
         """
         Compare two result dictionaries used in DAS assertions.
@@ -545,7 +546,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         response_text = response.data.decode('utf-8').casefold()
-        self.assertIn(self.CSRF_EXPIRED_MESSAGE, response_text)
+        self.assertIn(APP_CSRF_EXPIRED_MESSAGE.casefold(), response_text)
 
         with self.client.session_transaction() as sess:
             self.assertIsNone(sess.get('user_id'))
@@ -564,6 +565,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         without_pf_tax_input = calculate_transaction(1000.0, 'PJ', True, 0.06, 0.0)
 
         self.assertEqual(with_pf_tax_input['pf_tax'], 0.0)
+        self.assertEqual(with_pf_tax_input['invoice_tax'], 60.0)
         self.assertEqual(with_pf_tax_input['invoice_tax'], with_pf_tax_input['total_tax'])
         self.assertEqual(with_pf_tax_input, without_pf_tax_input)
 
