@@ -228,6 +228,12 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 )
 
     def set_csrf_token(self, csrf_token: str = 'test-csrf-auth') -> str:
+        """
+        Persist a CSRF token in the test client session.
+
+        :param csrf_token: Token value to store in ``sess['_csrf_token']``.
+        :return: The same token value, to support concise test setup.
+        """
         with self.client.session_transaction() as sess:
             sess['_csrf_token'] = csrf_token
         return csrf_token
@@ -277,6 +283,13 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 self.assertTrue(isfinite(value), msg=f'{msg_prefix}{key} should remain finite')
 
     def _count_clients_by_name(self, db, name: str) -> int:
+        """
+        Count client rows by exact name.
+
+        :param db: Active SQLite connection used by tests.
+        :param name: Client name to match in ``clients.name``.
+        :return: Number of matching rows.
+        """
         return int(db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (name,)).fetchone()[0])
 
     def test_set_csrf_sets_session_token(self):
@@ -495,6 +508,9 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertLessEqual(result['effective_rate'], 100.0)
 
     def test_calculate_transaction_at_float_max_with_100_percent_rate(self):
+        # Boundary case (not overflow): gross is float max and rate is exactly 1.0.
+        # Expected behavior is deterministic because gross * 1.0 == gross in IEEE-754,
+        # so all returned values should remain finite and consistent.
         result = calculate_transaction(sys.float_info.max, 'PJ', True, 1.0, 0.0)
         self._assert_transaction_values_valid(result, require_finite_values=True, context='float max boundary')
         self.assertEqual(result['gross'], sys.float_info.max)
@@ -506,8 +522,11 @@ class AuthAndCalculationsTest(unittest.TestCase):
 
     def test_calculate_transaction_overflow_multiplication(self):
         # Overflow-prone multiplication (gross * rate > float max).
-        # Here we assert the implementation doesn't return NaN values
-        # and preserves consistent relationships among output fields.
+        # Expected handling strategy:
+        # - NaN must never be returned;
+        # - +inf is acceptable for overflowed tax/rate fields;
+        # - relational invariants (e.g., total_tax matches invoice_tax for PJ with invoice)
+        #   must still hold.
         overflowing_gross = sys.float_info.max * 0.75
         overflow_result = calculate_transaction(overflowing_gross, 'PJ', True, 1.5, 0.0)
         self._assert_transaction_values_valid(overflow_result, context='overflow-prone multiplication')
