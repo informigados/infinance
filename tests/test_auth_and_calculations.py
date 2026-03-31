@@ -20,7 +20,16 @@ from werkzeug.security import generate_password_hash
 
 
 class AuthAndCalculationsTest(unittest.TestCase):
-    CSRF_EXPIRED_MESSAGE = 'sessão expirou'
+    CSRF_EXPIRED_MESSAGE = (
+        'sua sessão expirou ou o formulário está desatualizado. '
+        'recarregue a página e tente novamente.'
+    )
+    MONTH_FORMAT = '%Y-%m'
+    USER_INSERT_SQL = (
+        'INSERT INTO users (username, password_hash, role, must_change_password, created_at) '
+        'VALUES (?, ?, ?, 0, ?)'
+    )
+    USER_UPDATE_SQL = 'UPDATE users SET password_hash = ?, role = ?, must_change_password = 0 WHERE id = ?'
     CALCULATION_RESULT_KEYS = (
         'annex',
         'nominal_rate',
@@ -35,6 +44,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
     INVALID_FORCED_ANNEX_VALUES = [
         'INVALID',
         'VI',
+        'III_V',
         '',
         ' ',
         '\n',
@@ -76,17 +86,17 @@ class AuthAndCalculationsTest(unittest.TestCase):
             existing = get_user_by_username(cls.username)
             if existing is None:
                 execute(
-                    '''INSERT INTO users (username, password_hash, role, must_change_password, created_at)
-                       VALUES (?, ?, 'viewer', 0, ?)''',
+                    cls.USER_INSERT_SQL,
                     (
                         cls.username,
                         generate_password_hash(cls.password),
+                        'viewer',
                         datetime.now(timezone.utc).isoformat(timespec='seconds'),
                     ),
                 )
             else:
                 execute(
-                    'UPDATE users SET password_hash = ?, role = ?, must_change_password = 0 WHERE id = ?',
+                    cls.USER_UPDATE_SQL,
                     (generate_password_hash(cls.password), 'viewer', int(existing['id'])),
                 )
             refreshed = get_user_by_username(cls.username)
@@ -95,17 +105,17 @@ class AuthAndCalculationsTest(unittest.TestCase):
             admin_existing = get_user_by_username(cls.admin_username)
             if admin_existing is None:
                 execute(
-                    '''INSERT INTO users (username, password_hash, role, must_change_password, created_at)
-                       VALUES (?, ?, 'admin', 0, ?)''',
+                    cls.USER_INSERT_SQL,
                     (
                         cls.admin_username,
                         generate_password_hash(cls.admin_password),
+                        'admin',
                         datetime.now(timezone.utc).isoformat(timespec='seconds'),
                     ),
                 )
             else:
                 execute(
-                    'UPDATE users SET password_hash = ?, role = ?, must_change_password = 0 WHERE id = ?',
+                    cls.USER_UPDATE_SQL,
                     (generate_password_hash(cls.admin_password), 'admin', int(admin_existing['id'])),
                 )
 
@@ -523,6 +533,15 @@ class AuthAndCalculationsTest(unittest.TestCase):
             'Informe uma receita bruta acumulada dos últimos 12 meses (RBT12) maior que zero.',
         )
 
+    def test_calculate_das_advanced_negative_revenue(self):
+        result = calculate_das_advanced(5000.0, -1.0, 1000.0, 'III_V')
+        error = result.get('error')
+        self.assertIsNotNone(error)
+        self.assertEqual(
+            error,
+            'Informe uma receita bruta acumulada dos últimos 12 meses (RBT12) maior que zero.',
+        )
+
     def test_calculate_das_advanced_over_limit(self):
         result = calculate_das_advanced(5000.0, 4_900_000.0, 100_000.0, 'III_V')
         error = result.get('error')
@@ -653,7 +672,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             db = get_db()
             with self.savepoint(db, 'monthly_insights_test', rollback_on_success=True):
                 now_dt = datetime.now(timezone.utc)
-                month = now_dt.strftime('%Y-%m')
+                month = now_dt.strftime(self.MONTH_FORMAT)
                 now = now_dt.isoformat(timespec='seconds')
                 client_cursor = db.execute(
                     'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
