@@ -51,6 +51,7 @@ build/
 *.log
 logs/
 analises/
+docs/
 .cache/
 .tmp/
 qa_server.err.log

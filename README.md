@@ -1,4 +1,4 @@
-# INFinance 💚
+﻿# INFinance 💚
 
 Plataforma premium de controle **financeiro e fiscal** para agências e empresas brasileiras, com foco em operação real: entradas, despesas, relatórios, simulação tributária e gestão de DAS/Fator R.
 
@@ -262,8 +262,6 @@ Workflow incluído em `.github/workflows/ci.yml` com:
 
 - Guia de contribuição: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Política de segurança: [SECURITY.md](SECURITY.md)
-- Guia interno de layout: [docs/LAYOUT_GUIDE.md](docs/LAYOUT_GUIDE.md)
-- Auditoria técnica mais recente: [docs/AUDITORIA_TECNICA_2026-03-28.md](docs/AUDITORIA_TECNICA_2026-03-28.md)
 
 ## ⚠️ Aviso importante
 
