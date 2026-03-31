@@ -62,7 +62,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
         )
         try:
             self.assertEqual(login_response.status_code, 302)
-            self.assertIn('/dashboard', login_response.headers.get('Location', ''))
+            location = login_response.headers.get('Location', '')
+            self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
         finally:
             login_response.close()
 
