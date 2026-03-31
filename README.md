@@ -272,7 +272,7 @@ Workflow incluído em `.github/workflows/ci.yml` com:
 
 ## 📝 Registro de alterações
 
-### 28-03-2026 (1.0.0)
+### 31-03-2026 (1.0.0)
 
 - Lançamento inicial.
 
