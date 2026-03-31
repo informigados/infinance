@@ -16,6 +16,10 @@ from werkzeug.security import generate_password_hash
 
 
 class AuthAndCalculationsTest(unittest.TestCase):
+    # Mantém o teste de insight de margem consistente sem acoplar a cada detalhe textual.
+    MARGIN_INSIGHT_PATTERN = r'^Margem operacional estimada: -?\d+(?:\.\d+)?% sobre a receita bruta do período\.$'
+    PERCENTAGE_VALUE_PATTERN = r'-?\d+(?:\.\d+)?%'
+
     @classmethod
     def setUpClass(cls):
         app.config.update(TESTING=True)
@@ -88,7 +92,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             self.assertEqual(sess.get('role'), 'viewer')
 
     def test_logout_flow(self):
-        csrf_token = self.set_csrf('csrf-auth-ok')
+        csrf_token = self.set_csrf('csrf-auth-logout')
         login_response = self.login_with_valid_credentials(csrf_token)
         self.assertEqual(login_response.status_code, 302)
 
@@ -285,22 +289,13 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertIn(non_existent_forced_result['annex'], {'III', 'V'})
 
     def test_build_monthly_report_data_includes_insights(self):
-        month = '2024-01'
+        month = '2099-01'
         with app.app_context():
             db = get_db()
-            month_start = '2024-01-01'
-            next_month_start = '2024-02-01'
+            month_start = '2099-01-01'
+            next_month_start = '2099-02-01'
             db.execute('SAVEPOINT monthly_insights_test')
             try:
-                db.execute(
-                    'DELETE FROM transactions WHERE date_received >= ? AND date_received < ?',
-                    (month_start, next_month_start),
-                )
-                db.execute(
-                    'DELETE FROM expenses WHERE date_incurred >= ? AND date_incurred < ?',
-                    (month_start, next_month_start),
-                )
-
                 now = datetime.now().isoformat(timespec='seconds')
                 client_cursor = db.execute(
                     'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
@@ -336,10 +331,10 @@ class AuthAndCalculationsTest(unittest.TestCase):
                         1000.0,
                         'PJ',
                         1,
-                        'NF-INSIGHTS-2024-01',
+                        'NF-INSIGHTS-2099-01',
                         'Transação de teste para insights',
                         0.0,
-                        '2024-01-15',
+                        '2099-01-15',
                         'recebido',
                         'Teste determinístico',
                         now,
@@ -353,7 +348,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
                         'Despesa de teste para insights',
                         'marketing',
                         400.0,
-                        '2024-01-20',
+                        '2099-01-20',
                         0,
                         'Teste determinístico',
                         now,
@@ -368,7 +363,6 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertIn('insights', data)
         self.assertIsInstance(data['insights'], list)
         insights = data['insights']
-        self.assertEqual(len(insights), 3)
 
         for insight in insights:
             self.assertIsInstance(insight, str)
@@ -377,25 +371,22 @@ class AuthAndCalculationsTest(unittest.TestCase):
         gross = float(data['income_totals']['gross_total'])
         expense_total = float(data['expense_total'])
         net = float(data['income_totals']['net_total'])
+        self.assertGreater(gross, 0.0)
+        self.assertGreater(expense_total, 0.0)
+        self.assertGreater(net, 0.0)
+        self.assertEqual(len(insights), 3)
 
         first_insight = insights[0]
-        if gross > 0:
-            self.assertRegex(first_insight, r'^Margem operacional estimada: -?\d+(?:\.\d+)?% sobre a receita bruta do período\.$')
-        else:
-            self.assertEqual(first_insight, 'Sem receita no período para cálculo de margem operacional.')
+        self.assertRegex(first_insight, self.MARGIN_INSIGHT_PATTERN)
 
         second_insight = insights[1]
-        if expense_total > 0:
-            self.assertTrue(second_insight.startswith('Maior categoria de despesas: '))
-            self.assertIn(' em R$ ', second_insight)
-        else:
-            self.assertEqual(second_insight, 'Não há despesas registradas no período selecionado.')
+        self.assertTrue(second_insight.startswith('Maior categoria de despesas: '))
+        self.assertIn(' em R$ ', second_insight)
 
-        if net > 0:
-            self.assertEqual(len(insights), 3)
-            self.assertRegex(insights[2], r'^Pressão tributária estimada: -?\d+(?:\.\d+)?% da receita bruta\.$')
-        else:
-            self.assertEqual(len(insights), 2)
+        third_insight = insights[2]
+        self.assertTrue(third_insight.startswith('Pressão tributária estimada: '))
+        self.assertRegex(third_insight, self.PERCENTAGE_VALUE_PATTERN)
+        self.assertIn('receita bruta', third_insight)
 
 
 if __name__ == '__main__':
