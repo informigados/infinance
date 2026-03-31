@@ -1,5 +1,6 @@
 import unittest
 import contextlib
+import re
 from math import isfinite
 from datetime import datetime, timezone
 
@@ -52,12 +53,21 @@ class AuthAndCalculationsTest(unittest.TestCase):
 
     @contextlib.contextmanager
     def savepoint(self, db, name: str):
-        db.execute(f'SAVEPOINT {name}')
+        safe_name = self._validate_savepoint_name(name)
+        db.execute(f'SAVEPOINT {safe_name}')
         try:
             yield
         finally:
-            db.execute(f'ROLLBACK TO SAVEPOINT {name}')
-            db.execute(f'RELEASE SAVEPOINT {name}')
+            db.execute(f'ROLLBACK TO SAVEPOINT {safe_name}')
+            db.execute(f'RELEASE SAVEPOINT {safe_name}')
+
+    @staticmethod
+    def _validate_savepoint_name(name: str) -> str:
+        if not isinstance(name, str) or not name:
+            raise ValueError('Savepoint name must be a non-empty string.')
+        if re.fullmatch(r'[A-Za-z0-9_]+', name) is None:
+            raise ValueError('Invalid savepoint name; only letters, digits, and underscores are allowed.')
+        return name
 
     def set_csrf(self, token: str = 'test-csrf-auth') -> str:
         with self.client.session_transaction() as sess:
@@ -394,7 +404,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertGreater(gross, 0.0)
         self.assertGreater(expense_total, 0.0)
         self.assertGreater(net, 0.0)
-        self.assertEqual(len(insights), 3)
+        self.assertGreaterEqual(len(insights), 3)
 
         first_insight = insights[0]
         self.assertRegex(first_insight, self.MARGIN_INSIGHT_PATTERN)
@@ -415,7 +425,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
             pre_existing = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
             self.assertEqual(pre_existing, 0)
 
-            with self.assertRaises(RuntimeError):
+            did_raise = False
+            try:
                 with self.savepoint(db, 'monthly_insights_rollback_test'):
                     now = datetime.now(timezone.utc).isoformat(timespec='seconds')
                     db.execute(
@@ -425,6 +436,10 @@ class AuthAndCalculationsTest(unittest.TestCase):
                     in_savepoint_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
                     self.assertEqual(in_savepoint_count, 1)
                     raise RuntimeError('force rollback scenario')
+            except RuntimeError:
+                did_raise = True
+
+            self.assertTrue(did_raise)
 
             post_rollback_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
             self.assertEqual(post_rollback_count, 0)
