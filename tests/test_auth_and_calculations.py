@@ -191,10 +191,10 @@ class AuthAndCalculationsTest(unittest.TestCase):
                     msg=f"Value for key '{key}' in {compared_name} does not match baseline value",
                 )
 
-    def set_csrf(self, token: str = 'test-csrf-auth') -> str:
+    def set_csrf(self, csrf_token: str = 'test-csrf-auth') -> str:
         with self.client.session_transaction() as sess:
-            sess['_csrf_token'] = token
-        return token
+            sess['_csrf_token'] = csrf_token
+        return csrf_token
 
     def login_with_credentials(self, csrf_token: str, username: str, password: str, next_value: str | None = None):
         payload = {
@@ -224,11 +224,11 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 self.assertTrue(isfinite(value), msg=f'{msg_prefix}{key} should remain finite')
 
     def test_set_csrf_sets_session_token(self):
-        token = 'csrf-test-coverage'
-        returned = self.set_csrf(token)
-        self.assertEqual(returned, token)
+        csrf_token = 'csrf-test-coverage'
+        returned = self.set_csrf(csrf_token)
+        self.assertEqual(returned, csrf_token)
         with self.client.session_transaction() as sess:
-            self.assertEqual(sess.get('_csrf_token'), token)
+            self.assertEqual(sess.get('_csrf_token'), csrf_token)
 
     def test_login_with_valid_credentials_helper(self):
         csrf_token = self.set_csrf('csrf-helper-ok')
@@ -416,6 +416,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
         expected_effective_rate = (expected_total_tax / gross) * 100
 
         self.assertEqual(result['gross'], gross)
+        # `calculate_transaction` rounds monetary/tax values to cents.
+        # `places=2` aligns assertions with this production behavior.
         self.assertAlmostEqual(result['invoice_tax'], expected_invoice_tax, places=2)
         self.assertAlmostEqual(result['pf_tax'], expected_pf_tax, places=2)
         self.assertAlmostEqual(result['total_tax'], expected_total_tax, places=2)
@@ -436,8 +438,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertGreaterEqual(result['effective_rate'], 0.0)
         self.assertLessEqual(result['effective_rate'], 100.0)
 
-    def test_calculate_transaction_at_float_max_boundary(self):
-        # Scenario 1: calculations exactly at float max boundary.
+    def test_calculate_transaction_at_float_max_with_100_percent_rate(self):
         result = calculate_transaction(sys.float_info.max, 'PJ', True, 1.0, 0.0)
         self._assert_transaction_values_valid(result, require_finite_values=True, context='float max boundary')
         self.assertEqual(result['gross'], sys.float_info.max)
@@ -447,8 +448,10 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertEqual(result['net'], 0.0)
         self.assertEqual(result['effective_rate'], 100.0)
 
-        # Scenario 2: overflow-prone multiplication (gross * rate > float max).
-        # Here we assert the implementation doesn't return NaN values.
+    def test_calculate_transaction_overflow_multiplication(self):
+        # Overflow-prone multiplication (gross * rate > float max).
+        # Here we assert the implementation doesn't return NaN values
+        # and preserves consistent relationships among output fields.
         overflowing_gross = sys.float_info.max * 0.75
         overflow_result = calculate_transaction(overflowing_gross, 'PJ', True, 1.5, 0.0)
         self._assert_transaction_values_valid(overflow_result, context='overflow-prone multiplication')
@@ -464,7 +467,6 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertTrue(isinf(overflow_result['invoice_tax']) or overflow_result['invoice_tax'] >= 0.0)
         self.assertTrue(isinf(overflow_result['total_tax']) or overflow_result['total_tax'] >= 0.0)
         self.assertLessEqual(overflow_result['net'], overflow_result['gross'])
-        self.assertTrue(isinf(overflow_result['net']) or overflow_result['net'] <= overflow_result['gross'])
         self.assertTrue(isinf(overflow_result['effective_rate']) or overflow_result['effective_rate'] >= 0.0)
 
     def test_calculate_transaction_at_float_max_boundary_realistic_rate(self):
