@@ -9,6 +9,7 @@ from app import (
     calculate_das_advanced,
     calculate_transaction,
     execute,
+    get_db,
     get_user_by_username,
 )
 from werkzeug.security import generate_password_hash
@@ -286,77 +287,88 @@ class AuthAndCalculationsTest(unittest.TestCase):
     def test_build_monthly_report_data_includes_insights(self):
         month = '2024-01'
         with app.app_context():
+            db = get_db()
             month_start = '2024-01-01'
             next_month_start = '2024-02-01'
+            db.execute('SAVEPOINT monthly_insights_test')
+            try:
+                db.execute(
+                    'DELETE FROM transactions WHERE date_received >= ? AND date_received < ?',
+                    (month_start, next_month_start),
+                )
+                db.execute(
+                    'DELETE FROM expenses WHERE date_incurred >= ? AND date_incurred < ?',
+                    (month_start, next_month_start),
+                )
 
-            execute('DELETE FROM transactions WHERE date_received >= ? AND date_received < ?', (month_start, next_month_start))
-            execute('DELETE FROM expenses WHERE date_incurred >= ? AND date_incurred < ?', (month_start, next_month_start))
+                now = datetime.now().isoformat(timespec='seconds')
+                client_cursor = db.execute(
+                    'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
+                    ('Cliente Insights Janeiro', 'PJ', 'Cliente de teste para insights', now),
+                )
+                service_cursor = db.execute(
+                    '''INSERT INTO services (
+                           name, service_type, tax_rate, cnae, cnae_description, annex, factor_r_applicable, description_template, created_at
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (
+                        'Serviço Insights Janeiro',
+                        'operacional',
+                        0.10,
+                        '6319-4/00',
+                        'Serviço de teste para geração de insights',
+                        'III',
+                        1,
+                        'Template teste insights',
+                        now,
+                    ),
+                )
+                client_id = int(client_cursor.lastrowid)
+                service_id = int(service_cursor.lastrowid)
 
-            now = datetime.now().isoformat(timespec='seconds')
-            client_cursor = execute(
-                'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
-                ('Cliente Insights Janeiro', 'PJ', 'Cliente de teste para insights', now),
-            )
-            service_cursor = execute(
-                '''INSERT INTO services (
-                       name, service_type, tax_rate, cnae, cnae_description, annex, factor_r_applicable, description_template, created_at
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                (
-                    'Serviço Insights Janeiro',
-                    'operacional',
-                    0.10,
-                    '6319-4/00',
-                    'Serviço de teste para geração de insights',
-                    'III',
-                    1,
-                    'Template teste insights',
-                    now,
-                ),
-            )
-            client_id = int(client_cursor.lastrowid)
-            service_id = int(service_cursor.lastrowid)
+                db.execute(
+                    '''INSERT INTO transactions (
+                           client_id, service_id, amount, channel, invoice_issued, invoice_number, invoice_description,
+                           expected_pf_tax, date_received, status, notes, created_at
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (
+                        client_id,
+                        service_id,
+                        1000.0,
+                        'PJ',
+                        1,
+                        'NF-INSIGHTS-2024-01',
+                        'Transação de teste para insights',
+                        0.0,
+                        '2024-01-15',
+                        'recebido',
+                        'Teste determinístico',
+                        now,
+                    ),
+                )
 
-            execute(
-                '''INSERT INTO transactions (
-                       client_id, service_id, amount, channel, invoice_issued, invoice_number, invoice_description,
-                       expected_pf_tax, date_received, status, notes, created_at
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                (
-                    client_id,
-                    service_id,
-                    1000.0,
-                    'PJ',
-                    1,
-                    'NF-INSIGHTS-2024-01',
-                    'Transação de teste para insights',
-                    0.0,
-                    '2024-01-15',
-                    'recebido',
-                    'Teste determinístico',
-                    now,
-                ),
-            )
+                db.execute(
+                    '''INSERT INTO expenses (description, category, amount, date_incurred, is_fixed, notes, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                    (
+                        'Despesa de teste para insights',
+                        'marketing',
+                        400.0,
+                        '2024-01-20',
+                        0,
+                        'Teste determinístico',
+                        now,
+                    ),
+                )
 
-            execute(
-                '''INSERT INTO expenses (description, category, amount, date_incurred, is_fixed, notes, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                (
-                    'Despesa de teste para insights',
-                    'marketing',
-                    400.0,
-                    '2024-01-20',
-                    0,
-                    'Teste determinístico',
-                    now,
-                ),
-            )
-
-            data = build_monthly_report_data(month)
+                data = build_monthly_report_data(month)
+            finally:
+                db.execute('ROLLBACK TO SAVEPOINT monthly_insights_test')
+                db.execute('RELEASE SAVEPOINT monthly_insights_test')
         self.assertEqual(data.get('month'), month)
         self.assertIn('insights', data)
         self.assertIsInstance(data['insights'], list)
         insights = data['insights']
-        self.assertGreaterEqual(len(insights), 2)
+        self.assertEqual(len(insights), 3)
 
         for insight in insights:
             self.assertIsInstance(insight, str)
