@@ -38,7 +38,6 @@ class AuthAndCalculationsTest(unittest.TestCase):
         'factor_r',
     )
     EXCLUDED_COMPARISON_KEYS = {'error', 'annex', 'uses_factor_r'}
-    EXCLUDED_COMPARISON_KEYS_WITH_MODE = EXCLUDED_COMPARISON_KEYS | {'annex_mode'}
     TRANSACTION_RESULT_KEYS = ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate')
     VALID_FORCED_ANNEX_VALUES = ('I', 'II', 'III', 'IV', 'V')
     INVALID_FORCED_ANNEX_VALUES = [
@@ -576,7 +575,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             baseline_annex_ii_result,
             forced_annex_result,
             'forced_annex_result',
-            excluded_keys=self.EXCLUDED_COMPARISON_KEYS_WITH_MODE,
+            excluded_keys=self.EXCLUDED_COMPARISON_KEYS | {'annex_mode'},
         )
 
     def test_calculate_das_advanced_forced_same_annex_as_natural(self):
