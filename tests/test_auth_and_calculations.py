@@ -1,6 +1,8 @@
 import unittest
 import contextlib
+import os
 import re
+import secrets
 import sys
 import uuid
 from math import isfinite, isinf, isnan
@@ -56,7 +58,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
     EXCLUDED_COMPARISON_KEYS = {'error', 'annex', 'uses_factor_r'}
     TRANSACTION_RESULT_KEYS = ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate')
     VALID_FORCED_ANNEX_VALUES = ('I', 'II', 'III', 'IV', 'V')
-    INVALID_FORCED_ANNEX_VALUES = [
+    INVALID_FORCED_ANNEX_VALUES = (
         'INVALID',
         'VI',
         # 'III_V' is valid for annex_mode, but forced_annex accepts only a single annex (I-V).
@@ -78,7 +80,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         'iv',
         'v',
         object(),
-    ]
+    )
     # This keeps the test_build_monthly_report_data_includes_insights margin assertion
     # consistent without coupling to every textual detail.
     # NOTE: [.,] intentionally accepts both comma and period as decimal separators
@@ -95,9 +97,9 @@ class AuthAndCalculationsTest(unittest.TestCase):
         app.config.update(TESTING=True)
         bootstrap_database()
         cls.username = 'qa_auth_user'
-        cls.password = 'QaAuth@123'
+        cls.password = os.getenv('INFINANCE_TEST_USER_PASSWORD') or f'TestAuth!{secrets.token_hex(8)}'
         cls.admin_username = 'qa_auth_admin'
-        cls.admin_password = 'QaAdmin@123'
+        cls.admin_password = os.getenv('INFINANCE_TEST_ADMIN_PASSWORD') or f'TestAdmin!{secrets.token_hex(8)}'
         with app.app_context():
             existing = get_user_by_username(cls.username)
             if existing is None:
@@ -182,6 +184,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
         - `operation` is restricted to an explicit allowlist;
         - `name` is validated by `_validate_savepoint_name` to only allow
           `[A-Za-z0-9_]+`.
+        Precondition: callers must pass a `name` that has already been
+        validated by `_validate_savepoint_name`.
         """
         allowed_operations = (
             'SAVEPOINT',
@@ -227,16 +231,18 @@ class AuthAndCalculationsTest(unittest.TestCase):
                     msg=f"Value for key '{key}' in {compared_name} does not match baseline value",
                 )
 
-    def set_csrf_token(self, csrf_token: str = 'test-csrf-auth') -> str:
+    def set_csrf_token(self, csrf_token: str | None = None) -> str:
         """
         Persist a CSRF token in the test client session.
 
-        :param csrf_token: Token value to store in ``sess['_csrf_token']``.
+        :param csrf_token: Optional token value to store in ``sess['_csrf_token']``.
+            When omitted, a secure random token is generated for the test.
         :return: The same token value, to support concise test setup.
         """
+        effective_token = csrf_token or secrets.token_urlsafe(32)
         with self.client.session_transaction() as sess:
-            sess['_csrf_token'] = csrf_token
-        return csrf_token
+            sess['_csrf_token'] = effective_token
+        return effective_token
 
     def login_with_credentials(self, csrf_token: str, username: str, password: str, next_value: str | None = None):
         """
@@ -293,21 +299,21 @@ class AuthAndCalculationsTest(unittest.TestCase):
         return int(db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (name,)).fetchone()[0])
 
     def test_set_csrf_sets_session_token(self):
-        csrf_token = 'csrf-test-coverage'
+        csrf_token = secrets.token_urlsafe(24)
         returned = self.set_csrf_token(csrf_token)
         self.assertEqual(returned, csrf_token)
         with self.client.session_transaction() as sess:
             self.assertEqual(sess.get('_csrf_token'), csrf_token)
 
     def test_login_with_valid_credentials_helper(self):
-        csrf_token = self.set_csrf_token('csrf-helper-ok')
+        csrf_token = self.set_csrf_token()
         response = self.login_with_valid_credentials(csrf_token)
         self.assertEqual(response.status_code, 302)
         location = response.headers.get('Location', '')
         self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
 
     def test_login_success(self):
-        csrf_token = self.set_csrf_token('csrf-auth-ok')
+        csrf_token = self.set_csrf_token()
         login_response = self.login_with_valid_credentials(csrf_token)
         self.assertEqual(login_response.status_code, 302)
         location = login_response.headers.get('Location', '')
@@ -319,7 +325,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             self.assertEqual(sess.get('role'), 'viewer')
 
     def test_login_admin_role(self):
-        csrf_token = self.set_csrf_token('csrf-auth-admin')
+        csrf_token = self.set_csrf_token()
         login_response = self.login_with_credentials(csrf_token, self.admin_username, self.admin_password)
         self.assertEqual(login_response.status_code, 302)
         location = login_response.headers.get('Location', '')
@@ -331,7 +337,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             self.assertEqual(sess.get('role'), 'admin')
 
     def test_logout_flow(self):
-        csrf_token = self.set_csrf_token('csrf-auth-logout')
+        csrf_token = self.set_csrf_token()
         login_response = self.login_with_valid_credentials(csrf_token)
         self.assertEqual(login_response.status_code, 302)
 
@@ -349,7 +355,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             self.assertIsNone(sess.get('role'))
 
     def test_login_invalid_password(self):
-        csrf_token = self.set_csrf_token('csrf-auth-invalid')
+        csrf_token = self.set_csrf_token()
         response = self.client.post(
             '/login',
             data={
@@ -366,7 +372,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             self.assertIsNone(sess.get('user_id'))
 
     def test_login_rejects_open_redirect(self):
-        csrf_token = self.set_csrf_token('csrf-auth-open-redirect')
+        csrf_token = self.set_csrf_token()
         response = self.client.post(
             '/login',
             data={
@@ -383,7 +389,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
 
     def test_login_rejects_protocol_relative_open_redirect(self):
-        csrf_token = self.set_csrf_token('csrf-auth-open-redirect-proto-relative')
+        csrf_token = self.set_csrf_token()
         response = self.client.post(
             '/login',
             data={
@@ -400,7 +406,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
 
     def test_login_rejects_credential_url_open_redirect(self):
-        csrf_token = self.set_csrf_token('csrf-auth-open-redirect-credentials')
+        csrf_token = self.set_csrf_token()
         response = self.client.post(
             '/login',
             data={
