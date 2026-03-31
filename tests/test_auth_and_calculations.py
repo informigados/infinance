@@ -215,6 +215,14 @@ class AuthAndCalculationsTest(unittest.TestCase):
         require_finite_values: bool = False,
         context: str = '',
     ) -> None:
+        """
+        Validate transaction result values against NaN/finite invariants.
+
+        :param result_dict: Output dictionary from `calculate_transaction`.
+        :param require_finite_values: When True, each numeric value must be finite.
+        :param context: Optional label prefixed to assertion messages to make
+            failures easier to diagnose for each scenario.
+        """
         msg_prefix = f'{context}: ' if context else ''
         for key in self.TRANSACTION_RESULT_KEYS:
             self.assertIn(key, result_dict, msg=f"{msg_prefix}missing key '{key}'")
@@ -525,16 +533,16 @@ class AuthAndCalculationsTest(unittest.TestCase):
         )
 
     def test_calculate_das_advanced_high_factor(self):
-        high_factor_result = calculate_das_advanced(10_000.0, 200_000.0, 60_000.0, 'III_V')
-        self.assertIsNone(high_factor_result.get('error'))
-        self.assertEqual(high_factor_result['annex'], 'III')
-        self.assertTrue(high_factor_result['uses_factor_r'])
+        high_payroll_factor_result = calculate_das_advanced(10_000.0, 200_000.0, 60_000.0, 'III_V')
+        self.assertIsNone(high_payroll_factor_result.get('error'))
+        self.assertEqual(high_payroll_factor_result['annex'], 'III')
+        self.assertTrue(high_payroll_factor_result['uses_factor_r'])
 
     def test_calculate_das_advanced_low_factor(self):
-        low_factor_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V')
-        self.assertIsNone(low_factor_result.get('error'))
-        self.assertEqual(low_factor_result['annex'], 'V')
-        self.assertTrue(low_factor_result['uses_factor_r'])
+        low_payroll_factor_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V')
+        self.assertIsNone(low_payroll_factor_result.get('error'))
+        self.assertEqual(low_payroll_factor_result['annex'], 'V')
+        self.assertTrue(low_payroll_factor_result['uses_factor_r'])
 
     def test_calculate_das_advanced_forced_annex(self):
         baseline_annex_ii_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'II')
