@@ -20,7 +20,7 @@ from werkzeug.security import generate_password_hash
 
 
 class AuthAndCalculationsTest(unittest.TestCase):
-    # Keeps the margin insight test consistent without coupling to every textual detail.
+    # This keeps the margin insight test consistent without coupling to every textual detail.
     MARGIN_INSIGHT_PATTERN = r'^Margem operacional estimada: -?\d+(?:[.,]\d+)?% sobre a receita bruta do período\.$'
     PERCENTAGE_VALUE_PATTERN = r'-?\d+(?:[.,]\d+)?%'
 
@@ -271,6 +271,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertTrue(isfinite(result['net']))
         self.assertTrue(isfinite(result['effective_rate']))
         expected_invoice_tax = gross * invoice_rate
+        # PF tax is not applied for PJ channel with invoice in this scenario; explicitly zero.
         expected_pf_tax = 0.0
         expected_total_tax = expected_invoice_tax + expected_pf_tax
         expected_net = gross - expected_total_tax
@@ -369,7 +370,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertFalse(forced_annex_result['uses_factor_r'])
 
         for key, baseline_value in baseline_annex_ii_result.items():
-            if key in {'error', 'annex', 'uses_factor_r'}:
+            if key in {'error', 'annex', 'uses_factor_r', 'annex_mode'}:
                 continue
             self.assertIn(key, forced_annex_result, msg=f"Missing key '{key}' in forced_annex_result")
             forced_value = forced_annex_result[key]
@@ -382,6 +383,11 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 self.assertAlmostEqual(forced_value, baseline_value, places=6)
             else:
                 self.assertIsInstance(forced_value, type(baseline_value))
+                self.assertEqual(
+                    forced_value,
+                    baseline_value,
+                    msg=f"Value for key '{key}' in forced_annex_result does not match baseline value",
+                )
 
     def test_calculate_das_advanced_invalid_forced_annex(self):
         for forced_annex in ['INVALID', 'VI']:
