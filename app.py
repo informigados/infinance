@@ -1258,6 +1258,8 @@ def verify_csrf() -> Response | None:
     provided = request.form.get('_csrf_token') or request.headers.get('X-CSRF-Token')
     if not expected or not provided or not secrets.compare_digest(expected, provided):
         flash('Sua sessão expirou ou o formulário está desatualizado. Recarregue a página e tente novamente.', 'error')
+        if request.endpoint == 'login':
+            return redirect(url_for('login'))
         return redirect(url_for('dashboard'))
 
     return None

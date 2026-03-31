@@ -56,16 +56,12 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 '_csrf_token': csrf_token,
                 'username': self.username,
                 'password': self.password,
-                'next': '/dashboard',
             },
             follow_redirects=False,
         )
-        try:
-            self.assertEqual(login_response.status_code, 302)
-            location = login_response.headers.get('Location', '')
-            self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
-        finally:
-            login_response.close()
+        self.assertEqual(login_response.status_code, 302)
+        location = login_response.headers.get('Location', '')
+        self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
 
         with self.client.session_transaction() as sess:
             self.assertEqual(sess.get('user_id'), self.user_id)
@@ -77,11 +73,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
             data={'_csrf_token': csrf_token},
             follow_redirects=False,
         )
-        try:
-            self.assertEqual(logout_response.status_code, 302)
-            self.assertIn('/login', logout_response.headers.get('Location', ''))
-        finally:
-            logout_response.close()
+        self.assertEqual(logout_response.status_code, 302)
+        self.assertIn('/login', logout_response.headers.get('Location', ''))
 
         with self.client.session_transaction() as sess:
             self.assertIsNone(sess.get('user_id'))
@@ -99,11 +92,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
             },
             follow_redirects=False,
         )
-        try:
-            self.assertEqual(response.status_code, 302)
-            self.assertIn('/login', response.headers.get('Location', ''))
-        finally:
-            response.close()
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/login', response.headers.get('Location', ''))
 
         with self.client.session_transaction() as sess:
             self.assertIsNone(sess.get('user_id'))
@@ -120,13 +110,25 @@ class AuthAndCalculationsTest(unittest.TestCase):
             },
             follow_redirects=False,
         )
-        try:
-            self.assertEqual(response.status_code, 302)
-            location = response.headers.get('Location', '')
-            self.assertNotIn('evil.example', location)
-            self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
-        finally:
-            response.close()
+        self.assertEqual(response.status_code, 302)
+        location = response.headers.get('Location', '')
+        self.assertNotIn('evil.example', location)
+        self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
+
+    def test_login_requires_csrf_token(self):
+        response = self.client.post(
+            '/login',
+            data={
+                'username': self.username,
+                'password': self.password,
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/login', response.headers.get('Location', ''))
+
+        with self.client.session_transaction() as sess:
+            self.assertIsNone(sess.get('user_id'))
 
     def test_calculate_transaction_pj_with_invoice(self):
         result = calculate_transaction(1000.0, 'PJ', True, 0.06, 120.0)
@@ -147,26 +149,26 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertEqual(result['effective_rate'], 0.0)
 
     def test_calculate_das_advanced_edge_cases(self):
-        error_zero = calculate_das_advanced(5000.0, 0.0, 1000.0, 'III_V')
-        self.assertIsNotNone(error_zero.get('error'))
+        zero_revenue_result = calculate_das_advanced(5000.0, 0.0, 1000.0, 'III_V')
+        self.assertIsNotNone(zero_revenue_result.get('error'))
 
-        error_over = calculate_das_advanced(5000.0, 4_900_000.0, 100_000.0, 'III_V')
-        self.assertIsNotNone(error_over.get('error'))
+        over_limit_result = calculate_das_advanced(5000.0, 4_900_000.0, 100_000.0, 'III_V')
+        self.assertIsNotNone(over_limit_result.get('error'))
 
-        high_factor = calculate_das_advanced(10_000.0, 200_000.0, 60_000.0, 'III_V')
-        self.assertIsNone(high_factor.get('error'))
-        self.assertEqual(high_factor['annex'], 'III')
-        self.assertTrue(high_factor['uses_factor_r'])
+        high_factor_result = calculate_das_advanced(10_000.0, 200_000.0, 60_000.0, 'III_V')
+        self.assertIsNone(high_factor_result.get('error'))
+        self.assertEqual(high_factor_result['annex'], 'III')
+        self.assertTrue(high_factor_result['uses_factor_r'])
 
-        low_factor = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V')
-        self.assertIsNone(low_factor.get('error'))
-        self.assertEqual(low_factor['annex'], 'V')
-        self.assertTrue(low_factor['uses_factor_r'])
+        low_factor_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V')
+        self.assertIsNone(low_factor_result.get('error'))
+        self.assertEqual(low_factor_result['annex'], 'V')
+        self.assertTrue(low_factor_result['uses_factor_r'])
 
-        forced = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex='II')
-        self.assertIsNone(forced.get('error'))
-        self.assertEqual(forced['annex'], 'II')
-        self.assertFalse(forced['uses_factor_r'])
+        forced_annex_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex='II')
+        self.assertIsNone(forced_annex_result.get('error'))
+        self.assertEqual(forced_annex_result['annex'], 'II')
+        self.assertFalse(forced_annex_result['uses_factor_r'])
 
     def test_build_monthly_report_data_includes_insights(self):
         month = datetime.now().strftime('%Y-%m')
