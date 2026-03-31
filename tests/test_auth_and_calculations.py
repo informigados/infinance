@@ -20,7 +20,9 @@ from werkzeug.security import generate_password_hash
 
 
 class AuthAndCalculationsTest(unittest.TestCase):
-    # This keeps the margin insight test consistent without coupling to every textual detail.
+    EXCLUDED_COMPARISON_KEYS = {'error', 'annex', 'uses_factor_r', 'annex_mode'}
+    # This keeps the test_build_monthly_report_data_includes_insights margin assertion
+    # consistent without coupling to every textual detail.
     # NOTE: [.,] intentionally accepts both comma and period as decimal separators
     # to tolerate locale-dependent formatting in test output.
     MARGIN_INSIGHT_PATTERN = r'^Margem operacional estimada: -?\d+(?:[.,]\d+)?% sobre a receita bruta do período\.$'
@@ -278,7 +280,9 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertTrue(isfinite(result['net']))
         self.assertTrue(isfinite(result['effective_rate']))
         expected_invoice_tax = gross * invoice_rate
-        # PF tax is not applied for PJ channel with invoice in this scenario; explicitly zero.
+        # Business rule: PF (personal) tax applies only to PF-channel transactions.
+        # For PJ-channel transactions that issue an invoice, only invoice tax applies,
+        # therefore PF tax is explicitly zero in this scenario.
         expected_pf_tax = 0.0
         expected_total_tax = expected_invoice_tax + expected_pf_tax
         expected_net = gross - expected_total_tax
@@ -306,6 +310,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertLessEqual(result['effective_rate'], 100.0)
 
     def test_calculate_transaction_at_float_max_boundary(self):
+        # Scenario 1: calculations exactly at float max boundary.
         result = calculate_transaction(sys.float_info.max, 'PJ', True, 1.0, 0.0)
         for key in ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate'):
             value = result[key]
@@ -404,7 +409,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertFalse(forced_annex_result['uses_factor_r'])
 
         for key, baseline_value in baseline_annex_ii_result.items():
-            if key in {'error', 'annex', 'uses_factor_r', 'annex_mode'}:
+            if key in self.EXCLUDED_COMPARISON_KEYS:
                 continue
             self.assertIn(key, forced_annex_result, msg=f"Missing key '{key}' in forced_annex_result")
             forced_value = forced_annex_result[key]
@@ -439,7 +444,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertEqual(forced_same_annex_result['annex'], 'V')
 
         for key, natural_value in natural_result.items():
-            if key in {'error', 'annex', 'uses_factor_r', 'annex_mode'}:
+            if key in self.EXCLUDED_COMPARISON_KEYS:
                 continue
             self.assertIn(key, forced_same_annex_result, msg=f"Missing key '{key}' in forced_same_annex_result")
             forced_value = forced_same_annex_result[key]
@@ -465,6 +470,12 @@ class AuthAndCalculationsTest(unittest.TestCase):
             '',
             ' ',
             '\n',
+            '\t',
+            '  ',
+            ' None ',
+            'X' * 1000,
+            '@#$%',
+            'ÁÉÍÓÚ',
             123,
             0.0,
             'i',
