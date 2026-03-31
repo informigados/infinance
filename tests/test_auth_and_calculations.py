@@ -59,6 +59,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
     INVALID_FORCED_ANNEX_VALUES = [
         'INVALID',
         'VI',
+        # 'III_V' is valid for annex_mode, but forced_annex accepts only a single annex (I-V).
         'III_V',
         '',
         ' ',
@@ -226,12 +227,21 @@ class AuthAndCalculationsTest(unittest.TestCase):
                     msg=f"Value for key '{key}' in {compared_name} does not match baseline value",
                 )
 
-    def set_csrf(self, csrf_token: str = 'test-csrf-auth') -> str:
+    def set_csrf_token(self, csrf_token: str = 'test-csrf-auth') -> str:
         with self.client.session_transaction() as sess:
             sess['_csrf_token'] = csrf_token
         return csrf_token
 
     def login_with_credentials(self, csrf_token: str, username: str, password: str, next_value: str | None = None):
+        """
+        Submit login credentials with a CSRF token.
+
+        :param csrf_token: Token expected by the CSRF middleware.
+        :param username: Username to authenticate.
+        :param password: Plain-text password for the user.
+        :param next_value: Optional post-login redirect target used by redirect tests.
+        :return: Flask test client response for POST /login without following redirects.
+        """
         payload = {
             '_csrf_token': csrf_token,
             'username': username,
@@ -248,7 +258,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self,
         result_dict: dict,
         require_finite_values: bool = False,
-        context: str = '',
+        context: str | None = None,
     ) -> None:
         """
         Validate transaction result values against NaN/finite invariants.
@@ -271,20 +281,20 @@ class AuthAndCalculationsTest(unittest.TestCase):
 
     def test_set_csrf_sets_session_token(self):
         csrf_token = 'csrf-test-coverage'
-        returned = self.set_csrf(csrf_token)
+        returned = self.set_csrf_token(csrf_token)
         self.assertEqual(returned, csrf_token)
         with self.client.session_transaction() as sess:
             self.assertEqual(sess.get('_csrf_token'), csrf_token)
 
     def test_login_with_valid_credentials_helper(self):
-        csrf_token = self.set_csrf('csrf-helper-ok')
+        csrf_token = self.set_csrf_token('csrf-helper-ok')
         response = self.login_with_valid_credentials(csrf_token)
         self.assertEqual(response.status_code, 302)
         location = response.headers.get('Location', '')
         self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
 
     def test_login_success(self):
-        csrf_token = self.set_csrf('csrf-auth-ok')
+        csrf_token = self.set_csrf_token('csrf-auth-ok')
         login_response = self.login_with_valid_credentials(csrf_token)
         self.assertEqual(login_response.status_code, 302)
         location = login_response.headers.get('Location', '')
@@ -296,7 +306,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             self.assertEqual(sess.get('role'), 'viewer')
 
     def test_login_admin_role(self):
-        csrf_token = self.set_csrf('csrf-auth-admin')
+        csrf_token = self.set_csrf_token('csrf-auth-admin')
         login_response = self.login_with_credentials(csrf_token, self.admin_username, self.admin_password)
         self.assertEqual(login_response.status_code, 302)
         location = login_response.headers.get('Location', '')
@@ -308,7 +318,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             self.assertEqual(sess.get('role'), 'admin')
 
     def test_logout_flow(self):
-        csrf_token = self.set_csrf('csrf-auth-logout')
+        csrf_token = self.set_csrf_token('csrf-auth-logout')
         login_response = self.login_with_valid_credentials(csrf_token)
         self.assertEqual(login_response.status_code, 302)
 
@@ -326,7 +336,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             self.assertIsNone(sess.get('role'))
 
     def test_login_invalid_password(self):
-        csrf_token = self.set_csrf('csrf-auth-invalid')
+        csrf_token = self.set_csrf_token('csrf-auth-invalid')
         response = self.client.post(
             '/login',
             data={
@@ -343,7 +353,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             self.assertIsNone(sess.get('user_id'))
 
     def test_login_rejects_open_redirect(self):
-        csrf_token = self.set_csrf('csrf-auth-open-redirect')
+        csrf_token = self.set_csrf_token('csrf-auth-open-redirect')
         response = self.client.post(
             '/login',
             data={
@@ -360,7 +370,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
 
     def test_login_rejects_protocol_relative_open_redirect(self):
-        csrf_token = self.set_csrf('csrf-auth-open-redirect-proto-relative')
+        csrf_token = self.set_csrf_token('csrf-auth-open-redirect-proto-relative')
         response = self.client.post(
             '/login',
             data={
@@ -377,7 +387,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
 
     def test_login_rejects_credential_url_open_redirect(self):
-        csrf_token = self.set_csrf('csrf-auth-open-redirect-credentials')
+        csrf_token = self.set_csrf_token('csrf-auth-open-redirect-credentials')
         response = self.client.post(
             '/login',
             data={
