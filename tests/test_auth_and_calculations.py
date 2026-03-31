@@ -21,7 +21,8 @@ from werkzeug.security import generate_password_hash
 
 class AuthAndCalculationsTest(unittest.TestCase):
     CSRF_EXPIRED_MESSAGE = 'sessão expirou'
-    EXCLUDED_COMPARISON_KEYS = {'error', 'annex', 'uses_factor_r', 'annex_mode'}
+    EXCLUDED_COMPARISON_KEYS = {'error', 'annex', 'uses_factor_r'}
+    EXCLUDED_COMPARISON_KEYS_WITH_MODE = EXCLUDED_COMPARISON_KEYS | {'annex_mode'}
     TRANSACTION_RESULT_KEYS = ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate')
     VALID_FORCED_ANNEX_VALUES = ('I', 'II', 'III', 'IV', 'V')
     INVALID_FORCED_ANNEX_VALUES = [
@@ -49,7 +50,11 @@ class AuthAndCalculationsTest(unittest.TestCase):
     # consistent without coupling to every textual detail.
     # NOTE: [.,] intentionally accepts both comma and period as decimal separators
     # to tolerate locale-dependent formatting in test output.
-    MARGIN_INSIGHT_PATTERN = r'^Margem operacional estimada: -?\d+(?:[.,]\d+)?% sobre a receita bruta do período\.$'
+    MARGIN_INSIGHT_PREFIX_PATTERN = r'Margem operacional estimada:'
+    MARGIN_INSIGHT_CONTEXT_PATTERN = r'sobre a receita bruta do período'
+    MARGIN_INSIGHT_PATTERN = (
+        rf'^{MARGIN_INSIGHT_PREFIX_PATTERN}\s*-?\d+(?:[.,]\d+)?%\s+{MARGIN_INSIGHT_CONTEXT_PATTERN}\.$'
+    )
     PERCENTAGE_VALUE_PATTERN = r'-?\d+(?:[.,]\d+)?%'
 
     @classmethod
@@ -102,6 +107,13 @@ class AuthAndCalculationsTest(unittest.TestCase):
 
     @contextlib.contextmanager
     def savepoint(self, db, name: str, rollback_on_success: bool = False):
+        """
+        Create a database savepoint and guarantee cleanup.
+
+        The context always RELEASEs the savepoint. It ROLLBACKs when:
+        1) an exception is raised inside the block, or
+        2) `rollback_on_success` is True.
+        """
         safe_name = self._validate_savepoint_name(name)
         db.execute(self._build_savepoint_sql('SAVEPOINT', safe_name))
         should_rollback = rollback_on_success
@@ -134,9 +146,23 @@ class AuthAndCalculationsTest(unittest.TestCase):
             raise ValueError('Unsupported savepoint operation.')
         return f'{operation} {name}'
 
-    def _assert_results_equal(self, baseline_result: dict, compared_result: dict, compared_name: str) -> None:
+    def _assert_results_equal(
+        self,
+        baseline_result: dict,
+        compared_result: dict,
+        compared_name: str,
+        excluded_keys: set[str] | None = None,
+    ) -> None:
+        """
+        Compare two result dictionaries used in DAS assertions.
+
+        Keys listed in `excluded_keys` are ignored. For the remaining keys:
+        - numeric values are compared with `assertAlmostEqual(..., places=6)`
+        - non-numeric values are compared by type and exact equality.
+        """
+        ignored = excluded_keys if excluded_keys is not None else self.EXCLUDED_COMPARISON_KEYS
         for key, baseline_value in baseline_result.items():
-            if key in self.EXCLUDED_COMPARISON_KEYS:
+            if key in ignored:
                 continue
             self.assertIn(key, compared_result, msg=f"Missing key '{key}' in {compared_name}")
             compared_value = compared_result[key]
@@ -173,7 +199,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
     def login_with_valid_credentials(self, csrf_token: str):
         return self.login_with_credentials(csrf_token, self.username, self.password)
 
-    def _assert_transaction_values_not_nan(self, result_dict: dict, check_finite: bool = False, context: str = '') -> None:
+    def _assert_transaction_values_valid(self, result_dict: dict, check_finite: bool = False, context: str = '') -> None:
         msg_prefix = f'{context}: ' if context else ''
         for key in self.TRANSACTION_RESULT_KEYS:
             self.assertIn(key, result_dict, msg=f"{msg_prefix}missing key '{key}'")
@@ -398,7 +424,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
     def test_calculate_transaction_at_float_max_boundary(self):
         # Scenario 1: calculations exactly at float max boundary.
         result = calculate_transaction(sys.float_info.max, 'PJ', True, 1.0, 0.0)
-        self._assert_transaction_values_not_nan(result, check_finite=True, context='float max boundary')
+        self._assert_transaction_values_valid(result, check_finite=True, context='float max boundary')
         self.assertEqual(result['gross'], sys.float_info.max)
         self.assertEqual(result['invoice_tax'], sys.float_info.max)
         self.assertEqual(result['pf_tax'], 0.0)
@@ -410,7 +436,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         # Here we assert the implementation doesn't return NaN values.
         overflowing_gross = sys.float_info.max * 0.75
         overflow_result = calculate_transaction(overflowing_gross, 'PJ', True, 1.5, 0.0)
-        self._assert_transaction_values_not_nan(overflow_result, context='overflow-prone multiplication')
+        self._assert_transaction_values_valid(overflow_result, context='overflow-prone multiplication')
         self.assertEqual(overflow_result['gross'], overflowing_gross)
 
     def test_calculate_transaction_at_float_max_boundary_realistic_rate(self):
@@ -418,7 +444,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         invoice_rate = 0.2
         result = calculate_transaction(gross, 'PJ', True, invoice_rate, 0.0)
 
-        self._assert_transaction_values_not_nan(
+        self._assert_transaction_values_valid(
             result,
             check_finite=True,
             context='float max boundary (realistic rate)',
@@ -493,6 +519,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             baseline_annex_ii_result,
             forced_annex_result,
             'forced_annex_result',
+            excluded_keys=self.EXCLUDED_COMPARISON_KEYS_WITH_MODE,
         )
 
     def test_calculate_das_advanced_forced_same_annex_as_natural(self):
