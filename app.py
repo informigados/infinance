@@ -15,7 +15,6 @@ from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 from flask import Flask, Response, flash, g, has_app_context, redirect, render_template, request, send_file, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -69,7 +68,7 @@ DATABASE = DATA_DIR / 'infinance.db'
 PDF_FONT_NAME = 'INFinanceUnicode'
 SECRET_FILE = DATA_DIR / '.infinance.secret'
 _BOOTSTRAP_LOCK = threading.Lock()
-_BOOTSTRAP_DONE = False
+_BOOTSTRAP_ONCE = threading.Event()
 
 AUTHORS = [
     {
@@ -93,6 +92,21 @@ PUBLIC_ENDPOINTS = {
     'login',
     'favicon_legacy',
 }
+
+POST_LOGIN_ENDPOINTS = {
+    'dashboard',
+    'about',
+    'company',
+    'clients',
+    'services',
+    'transactions',
+    'expenses',
+    'simulator',
+    'das_advanced',
+    'monthly_report',
+    'users',
+}
+POST_LOGIN_SESSION_KEY = '_post_login_endpoint'
 
 ADMIN_ENDPOINTS = {
     'users',
@@ -122,8 +136,8 @@ def resolve_secret_key() -> str:
     generated = secrets.token_hex(32)
     try:
         SECRET_FILE.write_text(generated, encoding='utf-8')
-    except OSError:
-        pass
+    except OSError as exc:
+        logging.getLogger(__name__).warning('Nao foi possivel persistir SECRET_FILE: %s', exc)
     return generated
 
 
@@ -544,22 +558,18 @@ def get_current_user() -> dict[str, Any] | None:
     return g.current_user_cache
 
 
-def build_safe_redirect_target(raw_target: str | None) -> str:
-    target = (raw_target or '').strip()
-    if not target:
-        return url_for('dashboard')
+def queue_post_login_endpoint(endpoint: str | None) -> None:
+    if endpoint in POST_LOGIN_ENDPOINTS:
+        session[POST_LOGIN_SESSION_KEY] = endpoint
+        return
+    session.pop(POST_LOGIN_SESSION_KEY, None)
 
-    parsed = urlparse(target)
-    if parsed.scheme or parsed.netloc:
-        if parsed.netloc == request.host and parsed.path.startswith('/'):
-            path = parsed.path
-            if parsed.query:
-                path += f'?{parsed.query}'
-            return path
-        return url_for('dashboard')
-    if not parsed.path.startswith('/'):
-        return url_for('dashboard')
-    return target
+
+def consume_post_login_target() -> str:
+    endpoint = session.pop(POST_LOGIN_SESSION_KEY, None)
+    if endpoint in POST_LOGIN_ENDPOINTS:
+        return url_for(endpoint)
+    return url_for('dashboard')
 
 
 def static_file_version(filename: str) -> str:
@@ -786,7 +796,7 @@ def calculate_das_advanced(
             'error': 'RBT12 acima de R$ 4.800.000,00. O cálculo simplificado aqui não cobre esse regime.',
         }
 
-    factor_r = payroll_12m / rbt12 if rbt12 > 0 else 0.0
+    factor_r = payroll_12m / rbt12
     annex_mode = parse_annex(annex_mode, 'III_V')
 
     if forced_annex in DAS_BRACKETS:
@@ -1240,19 +1250,17 @@ def get_or_create_csrf_token() -> str:
 @app.before_request
 def verify_csrf() -> Response | None:
     if request.method not in {'POST', 'PUT', 'PATCH', 'DELETE'}:
-        return
+        return None
     if request.endpoint == 'static':
-        return
+        return None
 
     expected = session.get('_csrf_token')
     provided = request.form.get('_csrf_token') or request.headers.get('X-CSRF-Token')
     if not expected or not provided or not secrets.compare_digest(expected, provided):
         flash('Sua sessão expirou ou o formulário está desatualizado. Recarregue a página e tente novamente.', 'error')
-        referrer = (request.referrer or '').strip()
-        parsed = urlparse(referrer) if referrer else None
-        is_same_host = bool(parsed) and (not parsed.netloc or parsed.netloc == request.host)
-        target = referrer if is_same_host else url_for('dashboard')
-        return redirect(target)
+        return redirect(url_for('dashboard'))
+
+    return None
 
 
 @app.before_request
@@ -1263,8 +1271,11 @@ def enforce_auth_and_permissions() -> Response | None:
 
     user = get_current_user()
     if user is None:
-        next_target = request.full_path if request.query_string else request.path
-        return redirect(url_for('login', next=next_target))
+        if request.method == 'GET':
+            queue_post_login_endpoint(endpoint)
+        else:
+            session.pop(POST_LOGIN_SESSION_KEY, None)
+        return redirect(url_for('login'))
 
     if endpoint in ADMIN_ENDPOINTS and not has_permission(user['role'], 'admin'):
         flash('Acesso restrito a administradores.', 'error')
@@ -1272,8 +1283,7 @@ def enforce_auth_and_permissions() -> Response | None:
 
     if request.method in WRITE_METHODS and endpoint not in WRITE_EXEMPT_ENDPOINTS and not has_permission(user['role'], 'write'):
         flash('Seu perfil possui permissão apenas de leitura.', 'error')
-        fallback = request.referrer or url_for('dashboard')
-        return redirect(build_safe_redirect_target(fallback))
+        return redirect(url_for('dashboard'))
 
     return None
 
@@ -1342,10 +1352,9 @@ def login() -> str:
         flash('Sessão iniciada com sucesso.', 'success')
         if user['must_change_password']:
             flash('Seu usuário utiliza senha provisória. Altere-a na área de usuários.', 'error')
-        target = build_safe_redirect_target(request.args.get('next') or request.form.get('next'))
-        return redirect(target)
+        return redirect(consume_post_login_target())
 
-    return render_template('login.html', next_target=build_safe_redirect_target(request.args.get('next')))
+    return render_template('login.html')
 
 
 @app.route('/logout', methods=['POST'])
@@ -2476,17 +2485,16 @@ def percent(value: Any) -> str:
 
 
 def bootstrap_database() -> None:
-    global _BOOTSTRAP_DONE
-    if _BOOTSTRAP_DONE:
+    if _BOOTSTRAP_ONCE.is_set():
         return
 
     with _BOOTSTRAP_LOCK:
-        if _BOOTSTRAP_DONE:
+        if _BOOTSTRAP_ONCE.is_set():
             return
         with app.app_context():
             init_db()
             seed_data()
-        _BOOTSTRAP_DONE = True
+        _BOOTSTRAP_ONCE.set()
 
 
 bootstrap_database()
@@ -2508,7 +2516,8 @@ if __name__ == '__main__':
 
     debug_raw = os.getenv('INFINANCE_DEBUG', '0').strip().lower()
     debug_requested = debug_raw in {'1', 'true', 'yes', 'on'}
-    debug = debug_requested and is_loopback_host(host)
+    if debug_requested:
+        print('[WARN] INFINANCE_DEBUG solicitado, mas o modo debug foi desabilitado por seguranca.')
 
     try:
         port = int(os.getenv('INFINANCE_PORT', os.getenv('PORT', '5000')))
@@ -2521,9 +2530,7 @@ if __name__ == '__main__':
         waitress_threads = 8
     waitress_threads = max(waitress_threads, 4)
 
-    if debug:
-        app.run(host=host, port=port, debug=True)
-    elif waitress_serve is not None:
+    if waitress_serve is not None:
         # Reduz ruído no terminal (ex.: "Task queue depth is 1") sem afetar logs de erro.
         logging.getLogger('waitress.queue').setLevel(logging.ERROR)
         print(f'[INFO] Starting INFinance in PRODUCTION mode on port {port}...')
