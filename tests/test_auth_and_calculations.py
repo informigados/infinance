@@ -327,6 +327,24 @@ class AuthAndCalculationsTest(unittest.TestCase):
             self.assertFalse(isnan(value), msg=f'{key} should not be NaN when overflow would occur')
         self.assertEqual(overflow_result['gross'], overflowing_gross)
 
+    def test_calculate_transaction_at_float_max_boundary_realistic_rate(self):
+        gross = sys.float_info.max
+        invoice_rate = 0.2
+        result = calculate_transaction(gross, 'PJ', True, invoice_rate, 0.0)
+
+        for key in ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate'):
+            value = result[key]
+            self.assertFalse(isnan(value), msg=f'{key} should not be NaN at float max boundary (realistic rate)')
+            self.assertTrue(isfinite(value), msg=f'{key} should remain finite at float max boundary (realistic rate)')
+
+        self.assertGreater(result['gross'], 0.0)
+        self.assertGreater(result['invoice_tax'], 0.0)
+        self.assertEqual(result['pf_tax'], 0.0)
+        self.assertGreaterEqual(result['total_tax'], result['invoice_tax'])
+        self.assertLessEqual(result['net'], result['gross'])
+        self.assertGreaterEqual(result['effective_rate'], 0.0)
+        self.assertLessEqual(result['effective_rate'], 100.0)
+
     def test_calculate_transaction_positive_gross_negative_tax_rate(self):
         result = calculate_transaction(1000.0, 'PJ', True, -0.1, 0.0)
         self.assertEqual(result['gross'], 1000.0)
@@ -441,11 +459,29 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 )
 
     def test_calculate_das_advanced_invalid_forced_annex(self):
-        for forced_annex in ['INVALID', 'VI']:
+        for forced_annex in [
+            'INVALID',
+            'VI',
+            '',
+            ' ',
+            '\n',
+            123,
+            0.0,
+            'i',
+            'ii',
+            'iii',
+            'iv',
+            'v',
+            object(),
+        ]:
             with self.subTest(forced_annex=forced_annex):
                 result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex=forced_annex)
                 self.assertIsNotNone(result.get('error'))
                 self.assertEqual(result.get('error'), 'Anexo forçado inválido. Use I, II, III, IV ou V.')
+
+    def test_calculate_das_advanced_none_forced_annex_is_allowed(self):
+        result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex=None)
+        self.assertIsNone(result.get('error'))
 
     def test_build_monthly_report_data_includes_insights(self):
         month = '2099-01'
