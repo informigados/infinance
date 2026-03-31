@@ -6,11 +6,11 @@ Este documento define o fluxo recomendado para manter qualidade, segurança e co
 
 ## Sumário
 
-- [Como começar](#como-começar-)
-- [Tipos de contribuição](#tipos-de-contribuição-)
-- [Padrões técnicos](#padrões-técnicos-)
-- [Checklist antes de abrir PR](#checklist-antes-de-abrir-pr-)
-- [Diretrizes de Pull Request](#diretrizes-de-pull-request-)
+- [Como começar](#como-começar)
+- [Tipos de contribuição](#tipos-de-contribuição)
+- [Padrões técnicos](#padrões-técnicos)
+- [Checklist antes de abrir PR](#checklist-antes-de-abrir-pr)
+- [Diretrizes de Pull Request](#diretrizes-de-pull-request)
 
 ## 🚀 Como começar 
 

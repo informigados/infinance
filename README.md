@@ -7,27 +7,27 @@ Plataforma premium de controle **financeiro e fiscal** para agências e empresas
 [![SQLite](https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-CSS_Compilado-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![CI](https://github.com/INformigados/infinance/actions/workflows/ci.yml/badge.svg)](https://github.com/INformigados/infinance/actions/workflows/ci.yml)
-[![Exportações](https://img.shields.io/badge/Exportações-CSV%20%7C%20XLSX%20%7C%20TXT%20%7C%20PDF-0F766E)](#exportações-inteligentes-)
+[![Exportações](https://img.shields.io/badge/Exportações-CSV%20%7C%20XLSX%20%7C%20TXT%20%7C%20PDF-0F766E)](#exportações-inteligentes)
 [![Status](https://img.shields.io/badge/Status-Produção-16A34A)](#)
-[![Licença](https://img.shields.io/badge/Licença-MIT-16A34A)](#licença-)
+[![Licença](https://img.shields.io/badge/Licença-MIT-16A34A)](#licença)
 
 ## 📚 Sumário
 
-- [Visão geral](#visão-geral-)
-- [Funcionalidades](#funcionalidades-)
-- [Stack técnica](#stack-técnica-)
-- [Segurança aplicada](#segurança-aplicada-)
-- [Requisitos](#requisitos-)
-- [Como executar](#como-executar-)
-- [Variáveis de ambiente](#variáveis-de-ambiente-)
-- [Estrutura do projeto](#estrutura-do-projeto-)
-- [Página Sobre](#página-sobre-)
-- [Exportações inteligentes](#exportações-inteligentes-)
-- [Build de executável e instalador](#build-de-executável-e-instalador-)
-- [CI no GitHub Actions](#ci-no-github-actions-)
-- [Roadmap imediato](#roadmap-imediato-)
-- [Contribuição e segurança](#contribuição-e-segurança-)
-- [Aviso importante](#aviso-importante-)
+- [Visão geral](#visão-geral)
+- [Funcionalidades](#funcionalidades)
+- [Stack técnica](#stack-técnica)
+- [Segurança aplicada](#segurança-aplicada)
+- [Requisitos](#requisitos)
+- [Como executar](#como-executar)
+- [Variáveis de ambiente](#variáveis-de-ambiente)
+- [Estrutura do projeto](#estrutura-do-projeto)
+- [Página Sobre](#página-sobre)
+- [Exportações inteligentes](#exportações-inteligentes)
+- [Build de executável e instalador](#build-de-executável-e-instalador)
+- [CI no GitHub Actions](#ci-no-github-actions)
+- [Roadmap imediato](#roadmap-imediato)
+- [Contribuição e segurança](#contribuição-e-segurança)
+- [Aviso importante](#aviso-importante)
 
 ## 🎯 Visão geral
 
@@ -196,6 +196,11 @@ infinance/
 ├─ infinance.db
 └─ .infinance.secret
 ```
+
+## 👤 Página Sobre
+
+A rota `/about` apresenta o propósito do projeto, pilares do produto e os autores.
+É uma área institucional para reforçar contexto, confiança e identidade do INFinance.
 
 ## 📤 Exportações inteligentes 
 
