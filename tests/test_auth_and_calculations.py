@@ -49,6 +49,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
         'description, category, amount, date_incurred, is_fixed, notes, created_at'
         ') VALUES (?, ?, ?, ?, ?, ?, ?)'
     )
+    # This is a focused subset of the successful DAS payload fields that must
+    # not appear when `forced_annex` is invalid (error short-circuit path).
     CALCULATION_RESULT_KEYS = (
         'annex',
         'nominal_rate',
@@ -56,6 +58,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
         'estimated_das',
         'factor_r',
     )
+    INVALID_FORCED_ANNEX_ERROR_MESSAGE = 'Anexo forçado inválido. Use I, II, III, IV ou V.'
+    NUMERIC_COMPARISON_PRECISION = 6
     EXCLUDED_COMPARISON_KEYS = {'error', 'annex', 'uses_factor_r'}
     TRANSACTION_RESULT_KEYS = ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate')
     VALID_FORCED_ANNEX_VALUES = ('I', 'II', 'III', 'IV', 'V')
@@ -205,8 +209,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         - `operation` is restricted to an explicit allowlist;
         - `name` is validated by `_validate_savepoint_name` to only allow
           `[A-Za-z0-9_]+`.
-        Precondition: callers must pass a `name` that has already been
-        validated by `_validate_savepoint_name`.
+        This method defensively validates `name` itself before interpolation.
         """
         allowed_operations = (
             'SAVEPOINT',
@@ -215,7 +218,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
         )
         if operation not in allowed_operations:
             raise ValueError('Unsupported savepoint operation.')
-        return f'{operation} {name}'
+        safe_name = AuthAndCalculationsTest._validate_savepoint_name(name)
+        return f'{operation} {safe_name}'
 
     def _assert_results_equal(
         self,
@@ -228,7 +232,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
         Compare two result dictionaries used in DAS assertions.
 
         Keys listed in `excluded_keys` are ignored. For the remaining keys:
-        - numeric values are compared with `assertAlmostEqual(..., places=6)`
+        - numeric values are compared with `assertAlmostEqual(...)` using
+          `NUMERIC_COMPARISON_PRECISION`
         - non-numeric values are compared by type and exact equality.
         """
         ignored = excluded_keys if excluded_keys is not None else self.EXCLUDED_COMPARISON_KEYS
@@ -243,7 +248,11 @@ class AuthAndCalculationsTest(unittest.TestCase):
                     (int, float),
                     msg=f"Value for key '{key}' in {compared_name} is not numeric as expected",
                 )
-                self.assertAlmostEqual(compared_value, baseline_value, places=6)
+                self.assertAlmostEqual(
+                    compared_value,
+                    baseline_value,
+                    places=self.NUMERIC_COMPARISON_PRECISION,
+                )
             else:
                 self.assertIsInstance(compared_value, type(baseline_value))
                 self.assertEqual(
@@ -472,6 +481,14 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertEqual(result['net'], 940.0)
         self.assertEqual(result['effective_rate'], 6.0)
 
+    def test_calculate_transaction_pj_with_invoice_ignores_expected_pf_tax(self):
+        with_pf_tax_input = calculate_transaction(1000.0, 'PJ', True, 0.06, 999.0)
+        without_pf_tax_input = calculate_transaction(1000.0, 'PJ', True, 0.06, 0.0)
+
+        self.assertEqual(with_pf_tax_input['pf_tax'], 0.0)
+        self.assertEqual(with_pf_tax_input['invoice_tax'], with_pf_tax_input['total_tax'])
+        self.assertEqual(with_pf_tax_input, without_pf_tax_input)
+
     def test_calculate_transaction_guards_negative_values(self):
         result = calculate_transaction(-50.0, 'PF', False, -0.15, -30.0)
         self.assertEqual(result['gross'], 0.0)
@@ -692,7 +709,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             with self.subTest(forced_annex=forced_annex):
                 result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex=forced_annex)
                 self.assertIsNotNone(result.get('error'))
-                self.assertEqual(result.get('error'), 'Anexo forçado inválido. Use I, II, III, IV ou V.')
+                self.assertEqual(result.get('error'), self.INVALID_FORCED_ANNEX_ERROR_MESSAGE)
                 # Invalid forced annex must short-circuit and avoid calculation payload fields.
                 for key in self.CALCULATION_RESULT_KEYS:
                     self.assertNotIn(key, result)
@@ -725,7 +742,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             annex_mode,
             forced_annex='INVALID',
         )
-        self.assertEqual(invalid_result.get('error'), 'Anexo forçado inválido. Use I, II, III, IV ou V.')
+        self.assertEqual(invalid_result.get('error'), self.INVALID_FORCED_ANNEX_ERROR_MESSAGE)
         for key in self.CALCULATION_RESULT_KEYS:
             self.assertNotIn(key, invalid_result)
 
