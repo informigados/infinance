@@ -61,6 +61,9 @@ class AuthAndCalculationsTest(unittest.TestCase):
     )
     INVALID_FORCED_ANNEX_ERROR_MESSAGE = 'Anexo forçado inválido. Use I, II, III, IV ou V.'
     NUMERIC_COMPARISON_PRECISION = 6
+    # Relative tolerance used for boundary comparisons near `sys.float_info.max`.
+    # 1e-12 is strict enough to catch regressions while tolerating tiny FP noise.
+    FLOAT_MAX_RELATIVE_TOLERANCE = 1e-12
     EXCLUDED_COMPARISON_KEYS = {'error', 'annex', 'uses_factor_r'}
     TRANSACTION_RESULT_KEYS = ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate')
     VALID_FORCED_ANNEX_VALUES = ('I', 'II', 'III', 'IV', 'V')
@@ -636,7 +639,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         # so all returned values should remain finite and consistent.
         result = calculate_transaction(sys.float_info.max, 'PJ', True, 1.0, 0.0)
         self._assert_transaction_values_valid(result, require_finite_values=True, context='float max boundary')
-        tolerance = sys.float_info.max * 1e-12
+        tolerance = sys.float_info.max * self.FLOAT_MAX_RELATIVE_TOLERANCE
         self.assertAlmostEqual(result['gross'], sys.float_info.max, delta=tolerance)
         self.assertAlmostEqual(result['invoice_tax'], sys.float_info.max, delta=tolerance)
         self.assertEqual(result['pf_tax'], 0.0)
@@ -894,6 +897,11 @@ class AuthAndCalculationsTest(unittest.TestCase):
 
         first_insight = insights[0]
         self.assertRegex(first_insight, self.MARGIN_INSIGHT_PATTERN)
+        margin_match = re.search(r'(-?\d+(?:[.,]\d+)?)%', first_insight)
+        self.assertIsNotNone(margin_match)
+        reported_margin = float(margin_match.group(1).replace(',', '.'))
+        expected_margin = ((net - expense_total) / gross) * 100 if gross > 0 else 0.0
+        self.assertAlmostEqual(reported_margin, expected_margin, places=2)
 
         second_insight = insights[1]
         self.assertTrue(second_insight.startswith('Maior categoria de despesas: '))
