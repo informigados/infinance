@@ -3,7 +3,7 @@ import contextlib
 import re
 import sys
 import uuid
-from math import isfinite
+from math import isfinite, isnan
 from datetime import datetime, timezone
 
 from app import (
@@ -297,6 +297,37 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertGreaterEqual(result['effective_rate'], 0.0)
         self.assertLessEqual(result['effective_rate'], 100.0)
 
+    def test_calculate_transaction_at_float_max_boundary(self):
+        result = calculate_transaction(sys.float_info.max, 'PJ', True, 1.0, 0.0)
+        for key in ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate'):
+            value = result[key]
+            self.assertFalse(isnan(value), msg=f'{key} should not be NaN at float max boundary')
+            self.assertTrue(isfinite(value), msg=f'{key} should remain finite at float max boundary')
+        self.assertEqual(result['gross'], sys.float_info.max)
+        self.assertEqual(result['invoice_tax'], sys.float_info.max)
+        self.assertEqual(result['pf_tax'], 0.0)
+        self.assertEqual(result['total_tax'], sys.float_info.max)
+        self.assertEqual(result['net'], 0.0)
+        self.assertEqual(result['effective_rate'], 100.0)
+
+    def test_calculate_transaction_positive_gross_negative_tax_rate(self):
+        result = calculate_transaction(1000.0, 'PJ', True, -0.1, 0.0)
+        self.assertEqual(result['gross'], 1000.0)
+        self.assertEqual(result['invoice_tax'], 0.0)
+        self.assertEqual(result['pf_tax'], 0.0)
+        self.assertEqual(result['total_tax'], 0.0)
+        self.assertEqual(result['net'], 1000.0)
+        self.assertEqual(result['effective_rate'], 0.0)
+
+    def test_calculate_transaction_positive_gross_negative_fixed_tax(self):
+        result = calculate_transaction(1000.0, 'PF', False, 0.15, -30.0)
+        self.assertEqual(result['gross'], 1000.0)
+        self.assertEqual(result['invoice_tax'], 0.0)
+        self.assertEqual(result['pf_tax'], 0.0)
+        self.assertEqual(result['total_tax'], 0.0)
+        self.assertEqual(result['net'], 1000.0)
+        self.assertEqual(result['effective_rate'], 0.0)
+
     def test_calculate_das_advanced_zero_revenue(self):
         result = calculate_das_advanced(5000.0, 0.0, 1000.0, 'III_V')
         error = result.get('error')
@@ -340,9 +371,17 @@ class AuthAndCalculationsTest(unittest.TestCase):
         for key, baseline_value in baseline_annex_ii_result.items():
             if key in {'error', 'annex', 'uses_factor_r'}:
                 continue
-            forced_value = forced_annex_result.get(key)
-            if isinstance(baseline_value, (int, float)) and isinstance(forced_value, (int, float)):
+            self.assertIn(key, forced_annex_result, msg=f"Missing key '{key}' in forced_annex_result")
+            forced_value = forced_annex_result[key]
+            if isinstance(baseline_value, (int, float)):
+                self.assertIsInstance(
+                    forced_value,
+                    (int, float),
+                    msg=f"Value for key '{key}' in forced_annex_result is not numeric as expected",
+                )
                 self.assertAlmostEqual(forced_value, baseline_value, places=6)
+            else:
+                self.assertIsInstance(forced_value, type(baseline_value))
 
     def test_calculate_das_advanced_invalid_forced_annex(self):
         for forced_annex in ['INVALID', 'VI']:
@@ -448,7 +487,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
     def test_monthly_insights_savepoint_rollback_behavior(self):
         with app.app_context():
             db = get_db()
-            marker = f'Cliente Savepoint Rollback {uuid.uuid4()}'
+            marker = f'Cliente_Savepoint_Rollback_{uuid.uuid4()}'
             pre_existing = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
             self.assertEqual(pre_existing, 0)
 
