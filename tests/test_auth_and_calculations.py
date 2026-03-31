@@ -21,6 +21,27 @@ from werkzeug.security import generate_password_hash
 
 class AuthAndCalculationsTest(unittest.TestCase):
     EXCLUDED_COMPARISON_KEYS = {'error', 'annex', 'uses_factor_r', 'annex_mode'}
+    INVALID_FORCED_ANNEX_VALUES = [
+        'INVALID',
+        'VI',
+        '',
+        ' ',
+        '\n',
+        '\t',
+        '  ',
+        ' None ',
+        'X' * 1000,
+        '@#$%',
+        'ÁÉÍÓÚ',
+        123,
+        0.0,
+        'i',
+        'ii',
+        'iii',
+        'iv',
+        'v',
+        object(),
+    ]
     # This keeps the test_build_monthly_report_data_includes_insights margin assertion
     # consistent without coupling to every textual detail.
     # NOTE: [.,] intentionally accepts both comma and period as decimal separators
@@ -90,6 +111,27 @@ class AuthAndCalculationsTest(unittest.TestCase):
         if operation not in allowed_operations:
             raise ValueError('Unsupported savepoint operation.')
         return f'{operation} {name}'
+
+    def _assert_results_equal(self, baseline_result: dict, compared_result: dict, compared_name: str) -> None:
+        for key, baseline_value in baseline_result.items():
+            if key in self.EXCLUDED_COMPARISON_KEYS:
+                continue
+            self.assertIn(key, compared_result, msg=f"Missing key '{key}' in {compared_name}")
+            compared_value = compared_result[key]
+            if isinstance(baseline_value, (int, float)):
+                self.assertIsInstance(
+                    compared_value,
+                    (int, float),
+                    msg=f"Value for key '{key}' in {compared_name} is not numeric as expected",
+                )
+                self.assertAlmostEqual(compared_value, baseline_value, places=6)
+            else:
+                self.assertIsInstance(compared_value, type(baseline_value))
+                self.assertEqual(
+                    compared_value,
+                    baseline_value,
+                    msg=f"Value for key '{key}' in {compared_name} does not match baseline value",
+                )
 
     def set_csrf(self, token: str = 'test-csrf-auth') -> str:
         with self.client.session_transaction() as sess:
@@ -407,26 +449,11 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertIsNone(forced_annex_result.get('error'))
         self.assertEqual(forced_annex_result['annex'], 'II')
         self.assertFalse(forced_annex_result['uses_factor_r'])
-
-        for key, baseline_value in baseline_annex_ii_result.items():
-            if key in self.EXCLUDED_COMPARISON_KEYS:
-                continue
-            self.assertIn(key, forced_annex_result, msg=f"Missing key '{key}' in forced_annex_result")
-            forced_value = forced_annex_result[key]
-            if isinstance(baseline_value, (int, float)):
-                self.assertIsInstance(
-                    forced_value,
-                    (int, float),
-                    msg=f"Value for key '{key}' in forced_annex_result is not numeric as expected",
-                )
-                self.assertAlmostEqual(forced_value, baseline_value, places=6)
-            else:
-                self.assertIsInstance(forced_value, type(baseline_value))
-                self.assertEqual(
-                    forced_value,
-                    baseline_value,
-                    msg=f"Value for key '{key}' in forced_annex_result does not match baseline value",
-                )
+        self._assert_results_equal(
+            baseline_annex_ii_result,
+            forced_annex_result,
+            'forced_annex_result',
+        )
 
     def test_calculate_das_advanced_forced_same_annex_as_natural(self):
         natural_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V')
@@ -442,49 +469,14 @@ class AuthAndCalculationsTest(unittest.TestCase):
         )
         self.assertIsNone(forced_same_annex_result.get('error'))
         self.assertEqual(forced_same_annex_result['annex'], 'V')
-
-        for key, natural_value in natural_result.items():
-            if key in self.EXCLUDED_COMPARISON_KEYS:
-                continue
-            self.assertIn(key, forced_same_annex_result, msg=f"Missing key '{key}' in forced_same_annex_result")
-            forced_value = forced_same_annex_result[key]
-            if isinstance(natural_value, (int, float)):
-                self.assertIsInstance(
-                    forced_value,
-                    (int, float),
-                    msg=f"Value for key '{key}' in forced_same_annex_result is not numeric as expected",
-                )
-                self.assertAlmostEqual(forced_value, natural_value, places=6)
-            else:
-                self.assertIsInstance(forced_value, type(natural_value))
-                self.assertEqual(
-                    forced_value,
-                    natural_value,
-                    msg=f"Value for key '{key}' in forced_same_annex_result does not match natural value",
-                )
+        self._assert_results_equal(
+            natural_result,
+            forced_same_annex_result,
+            'forced_same_annex_result',
+        )
 
     def test_calculate_das_advanced_invalid_forced_annex(self):
-        for forced_annex in [
-            'INVALID',
-            'VI',
-            '',
-            ' ',
-            '\n',
-            '\t',
-            '  ',
-            ' None ',
-            'X' * 1000,
-            '@#$%',
-            'ÁÉÍÓÚ',
-            123,
-            0.0,
-            'i',
-            'ii',
-            'iii',
-            'iv',
-            'v',
-            object(),
-        ]:
+        for forced_annex in self.INVALID_FORCED_ANNEX_VALUES:
             with self.subTest(forced_annex=forced_annex):
                 result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex=forced_annex)
                 self.assertIsNotNone(result.get('error'))
