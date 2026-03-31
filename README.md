@@ -7,28 +7,29 @@ Plataforma premium de controle **financeiro e fiscal** para agências e empresas
 [![SQLite](https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-CSS_Compilado-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![CI](https://github.com/INformigados/infinance/actions/workflows/ci.yml/badge.svg)](https://github.com/INformigados/infinance/actions/workflows/ci.yml)
-[![Exportações](https://img.shields.io/badge/Exportações-CSV%20%7C%20XLSX%20%7C%20TXT%20%7C%20PDF-0F766E)](#exportações-inteligentes)
-[![Status](https://img.shields.io/badge/Status-Produção-16A34A)](#)
-[![Licença](https://img.shields.io/badge/Licença-MIT-16A34A)](#licença)
+[![Exportações](https://img.shields.io/badge/Exportações-CSV%20%7C%20XLSX%20%7C%20TXT%20%7C%20PDF-0F766E)](#exportacoes-inteligentes)
+[![Status](https://img.shields.io/badge/Status-Produção-16A34A)](#visao-geral)
+[![Licença](https://img.shields.io/badge/Licença-MIT-16A34A)](#licenca)
 
 ## 📚 Sumário
 
-- [Visão geral](#visão-geral)
+- [Visão geral](#visao-geral)
 - [Funcionalidades](#funcionalidades)
-- [Stack técnica](#stack-técnica)
-- [Segurança aplicada](#segurança-aplicada)
+- [Stack técnica](#stack-tecnica)
+- [Segurança aplicada](#seguranca-aplicada)
 - [Requisitos](#requisitos)
 - [Como executar](#como-executar)
-- [Variáveis de ambiente](#variáveis-de-ambiente)
+- [Variáveis de ambiente](#variaveis-de-ambiente)
 - [Estrutura do projeto](#estrutura-do-projeto)
-- [Página Sobre](#página-sobre)
-- [Exportações inteligentes](#exportações-inteligentes)
-- [Build de executável e instalador](#build-de-executável-e-instalador)
+- [Página Sobre](#pagina-sobre)
+- [Exportações inteligentes](#exportacoes-inteligentes)
+- [Build de executável e instalador](#build-de-executavel-e-instalador)
 - [CI no GitHub Actions](#ci-no-github-actions)
 - [Roadmap imediato](#roadmap-imediato)
-- [Contribuição e segurança](#contribuição-e-segurança)
+- [Contribuição e segurança](#contribuicao-e-seguranca)
 - [Aviso importante](#aviso-importante)
 
+<a id="visao-geral"></a>
 ## 🎯 Visão geral
 
 O INFinance foi projetado para centralizar a operação financeira/fiscal de negócios de serviço no Brasil, permitindo:
@@ -39,6 +40,7 @@ O INFinance foi projetado para centralizar a operação financeira/fiscal de neg
 - Simulação de DAS com suporte a múltiplos anexos e Fator R.
 - Exportação de dados em formatos prontos para operação e análise.
 
+<a id="funcionalidades"></a>
 ## ✅ Funcionalidades 
 
 ### Operação financeira
@@ -78,6 +80,7 @@ O INFinance foi projetado para centralizar a operação financeira/fiscal de neg
 - Feedback visual de envio em formulários (`Processando...`) para evitar cliques duplicados.
 - Feedback de geração nos links de exportação (`Gerando...`) para downloads pesados.
 
+<a id="stack-tecnica"></a>
 ## 🧰 Stack técnica 
 
 - **Backend:** Flask 3.1.3 (Python)
@@ -85,6 +88,7 @@ O INFinance foi projetado para centralizar a operação financeira/fiscal de neg
 - **Frontend:** Jinja2 + Tailwind CSS compilado (`static/vendor/tailwind.compiled.css`)
 - **Exportações:** CSV, XLSX (openpyxl), TXT, PDF (reportlab)
 
+<a id="seguranca-aplicada"></a>
 ## 🔐 Segurança aplicada 
 
 - Proteção CSRF em formulários (`before_request`).
@@ -98,6 +102,7 @@ O INFinance foi projetado para centralizar a operação financeira/fiscal de neg
 
 Para processo de reporte de vulnerabilidades, veja [SECURITY.md](SECURITY.md).
 
+<a id="requisitos"></a>
 ## 📦 Requisitos
 
 - Python 3.x
@@ -111,6 +116,7 @@ Dependências Python:
 - openpyxl==3.1.5
 - reportlab==4.4.10
 
+<a id="como-executar"></a>
 ## 🚀 Como executar
 
 ### 1) Windows (recomendado)
@@ -143,6 +149,7 @@ python app.py
 
 Aplicação padrão: `http://127.0.0.1:5000`
 
+<a id="variaveis-de-ambiente"></a>
 ## ⚙️ Variáveis de ambiente 
 
 | Variável | Descrição | Exemplo |
@@ -162,6 +169,7 @@ Aplicação padrão: `http://127.0.0.1:5000`
 
 Se nenhuma chave for informada, o sistema usa `.infinance.secret` como fallback persistente.
 
+<a id="estrutura-do-projeto"></a>
 ## 🗂️ Estrutura do projeto 
 
 ```text
@@ -197,11 +205,13 @@ infinance/
 └─ .infinance.secret
 ```
 
+<a id="pagina-sobre"></a>
 ## 👤 Página Sobre
 
 A rota `/about` apresenta o propósito do projeto, pilares do produto e os autores.
 É uma área institucional para reforçar contexto, confiança e identidade do INFinance.
 
+<a id="exportacoes-inteligentes"></a>
 ## 📤 Exportações inteligentes 
 
 O sistema exporta com filtro mensal (`?month=YYYY-MM`) nas rotas de export:
@@ -210,6 +220,7 @@ O sistema exporta com filtro mensal (`?month=YYYY-MM`) nas rotas de export:
 - Despesas: **CSV, XLSX, TXT, PDF**
 - Relatório mensal: **CSV, XLSX, TXT, PDF**
 
+<a id="build-de-executavel-e-instalador"></a>
 ## 🖥️ Build de executável e instalador
 
 ### 1) Gerar executável com PyInstaller
@@ -238,6 +249,7 @@ Saída esperada:
 
 - `dist\installer\INFinance-Setup.exe`
 
+<a id="ci-no-github-actions"></a>
 ## 🧪 CI no GitHub Actions
 
 Workflow incluído em `.github/workflows/ci.yml` com:
@@ -251,6 +263,7 @@ Workflow incluído em `.github/workflows/ci.yml` com:
 - validação de endpoints de exportação com conferência de MIME e `Content-Disposition`.
 - testes dedicados para fluxo de autenticação (`login/logout`) e cálculos fiscais de borda.
 
+<a id="roadmap-imediato"></a>
 ## 🛣️ Roadmap imediato 
 
 - Integração opcional de CNAE por API pública (com cache e validação).
@@ -263,21 +276,25 @@ Workflow incluído em `.github/workflows/ci.yml` com:
 
 - Lançamento inicial.
 
+<a id="contribuicao-e-seguranca"></a>
 ## 🤝 Contribuição e segurança
 
 - Guia de contribuição: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Política de segurança: [SECURITY.md](SECURITY.md)
 
+<a id="aviso-importante"></a>
 ## ⚠️ Aviso importante
 
 As simulações e projeções tributárias do INFinance são apoio à gestão.  
 O fechamento fiscal/oficial deve ser validado com a contabilidade responsável.
 
+<a id="autores"></a>
 ## 👥 Autores
 
 - [INformigados](https://github.com/informigados)
 - [Alex Brito](https://github.com/AlexBritoDEV)
 
+<a id="licenca"></a>
 ## 📄 Licença
 
 Este projeto está licenciado sob a Licença MIT. Consulte [`LICENSE`](LICENSE) para obter detalhes.

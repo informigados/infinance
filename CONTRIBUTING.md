@@ -6,12 +6,13 @@ Este documento define o fluxo recomendado para manter qualidade, segurança e co
 
 ## Sumário
 
-- [Como começar](#como-começar)
-- [Tipos de contribuição](#tipos-de-contribuição)
-- [Padrões técnicos](#padrões-técnicos)
+- [Como começar](#como-comecar)
+- [Tipos de contribuição](#tipos-de-contribuicao)
+- [Padrões técnicos](#padroes-tecnicos)
 - [Checklist antes de abrir PR](#checklist-antes-de-abrir-pr)
 - [Diretrizes de Pull Request](#diretrizes-de-pull-request)
 
+<a id="como-comecar"></a>
 ## 🚀 Como começar 
 
 1. Faça um fork do projeto (ou use branch de feature no repositório principal).
@@ -34,6 +35,7 @@ Ou no Windows, via script automatizado:
 infinance.bat
 ```
 
+<a id="tipos-de-contribuicao"></a>
 ## 🧩 Tipos de contribuição 
 
 - Correções de bugs.
@@ -43,6 +45,7 @@ infinance.bat
 - Evolução de exportações e relatórios.
 - Ajustes de documentação.
 
+<a id="padroes-tecnicos"></a>
 ## 🧱 Padrões técnicos 
 
 - Backend em Flask deve manter foco em clareza e previsibilidade.
@@ -52,6 +55,7 @@ infinance.bat
 - Em alterações visuais, preserve o padrão premium/responsivo do sistema.
 - Mantenha textos e labels em **português do Brasil**.
 
+<a id="checklist-antes-de-abrir-pr"></a>
 ## ✅ Checklist antes de abrir PR 
 
 - [ ] O sistema sobe localmente sem erro.
@@ -70,6 +74,7 @@ infinance.bat
 - [ ] Segurança preservada (CSRF, headers, sessão).
 - [ ] Documentação atualizada (`README.md`, se aplicável).
 
+<a id="diretrizes-de-pull-request"></a>
 ## 📌 Diretrizes de Pull Request 
 
 Inclua no PR:
