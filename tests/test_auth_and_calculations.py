@@ -20,8 +20,10 @@ from werkzeug.security import generate_password_hash
 
 
 class AuthAndCalculationsTest(unittest.TestCase):
+    CSRF_EXPIRED_MESSAGE = 'sessão expirou'
     EXCLUDED_COMPARISON_KEYS = {'error', 'annex', 'uses_factor_r', 'annex_mode'}
     TRANSACTION_RESULT_KEYS = ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate')
+    VALID_FORCED_ANNEX_VALUES = ('I', 'II', 'III', 'IV', 'V')
     INVALID_FORCED_ANNEX_VALUES = [
         'INVALID',
         'VI',
@@ -315,7 +317,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         response_text = response.data.decode('utf-8').casefold()
-        self.assertIn('sessão expirou', response_text)
+        self.assertIn(self.CSRF_EXPIRED_MESSAGE, response_text)
 
         with self.client.session_transaction() as sess:
             self.assertIsNone(sess.get('user_id'))
@@ -380,8 +382,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertAlmostEqual(result['effective_rate'], expected_effective_rate, places=2)
 
     def test_calculate_transaction_near_float_limits(self):
-        near_max = sys.float_info.max / 10.0
-        result = calculate_transaction(near_max, 'PJ', True, 0.5, 0.0)
+        near_float_max = sys.float_info.max / 10.0
+        result = calculate_transaction(near_float_max, 'PJ', True, 0.5, 0.0)
         self.assertTrue(isfinite(result['gross']))
         self.assertTrue(isfinite(result['invoice_tax']))
         self.assertTrue(isfinite(result['total_tax']))
@@ -532,6 +534,15 @@ class AuthAndCalculationsTest(unittest.TestCase):
     def test_calculate_das_advanced_none_forced_annex_is_allowed(self):
         result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex=None)
         self.assertIsNone(result.get('error'))
+
+    def test_calculate_das_advanced_accepts_all_valid_forced_annex_values(self):
+        for forced_annex in self.VALID_FORCED_ANNEX_VALUES:
+            with self.subTest(forced_annex=forced_annex):
+                result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex=forced_annex)
+                self.assertIsNone(result.get('error'))
+                self.assertEqual(result.get('annex'), forced_annex)
+                self.assertIn('effective_rate', result)
+                self.assertIn('estimated_das', result)
 
     def test_build_monthly_report_data_includes_insights(self):
         with app.app_context():
