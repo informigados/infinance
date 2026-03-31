@@ -1,4 +1,5 @@
 import unittest
+from math import isfinite
 from datetime import datetime
 
 from app import (
@@ -148,12 +149,55 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertEqual(result['net'], 0.0)
         self.assertEqual(result['effective_rate'], 0.0)
 
+    def test_calculate_transaction_zero_amount_with_invoice(self):
+        result = calculate_transaction(0.0, 'PJ', True, 0.1, 0.0)
+        self.assertEqual(result['gross'], 0.0)
+        self.assertEqual(result['invoice_tax'], 0.0)
+        self.assertEqual(result['pf_tax'], 0.0)
+        self.assertEqual(result['total_tax'], 0.0)
+        self.assertEqual(result['net'], 0.0)
+        self.assertEqual(result['effective_rate'], 0.0)
+
+    def test_calculate_transaction_pf_channel_with_invoice_flag(self):
+        result = calculate_transaction(1000.0, 'PF', True, 0.2, 125.5)
+        self.assertEqual(result['gross'], 1000.0)
+        self.assertEqual(result['invoice_tax'], 0.0)
+        self.assertEqual(result['pf_tax'], 125.5)
+        self.assertEqual(result['total_tax'], 125.5)
+        self.assertEqual(result['net'], 874.5)
+        self.assertEqual(result['effective_rate'], 12.55)
+
+    def test_calculate_transaction_very_large_amounts(self):
+        gross = 1_000_000_000_000.0
+        invoice_rate = 0.05
+        result = calculate_transaction(gross, 'PJ', True, invoice_rate, 0.0)
+        self.assertTrue(isfinite(result['gross']))
+        self.assertTrue(isfinite(result['invoice_tax']))
+        self.assertTrue(isfinite(result['total_tax']))
+        self.assertTrue(isfinite(result['net']))
+        self.assertTrue(isfinite(result['effective_rate']))
+        self.assertEqual(result['gross'], gross)
+        self.assertAlmostEqual(result['invoice_tax'], gross * invoice_rate, places=2)
+        self.assertAlmostEqual(result['total_tax'], result['invoice_tax'] + result['pf_tax'], places=2)
+        self.assertAlmostEqual(result['net'], result['gross'] - result['total_tax'], places=2)
+        self.assertAlmostEqual(result['effective_rate'], (result['total_tax'] / gross) * 100, places=2)
+
     def test_calculate_das_advanced_edge_cases(self):
         zero_revenue_result = calculate_das_advanced(5000.0, 0.0, 1000.0, 'III_V')
-        self.assertIsNotNone(zero_revenue_result.get('error'))
+        zero_revenue_error = zero_revenue_result.get('error')
+        self.assertIsNotNone(zero_revenue_error)
+        self.assertEqual(
+            zero_revenue_error,
+            'Informe uma receita bruta acumulada dos últimos 12 meses (RBT12) maior que zero.',
+        )
 
         over_limit_result = calculate_das_advanced(5000.0, 4_900_000.0, 100_000.0, 'III_V')
-        self.assertIsNotNone(over_limit_result.get('error'))
+        over_limit_error = over_limit_result.get('error')
+        self.assertIsNotNone(over_limit_error)
+        self.assertEqual(
+            over_limit_error,
+            'RBT12 acima de R$ 4.800.000,00. O cálculo simplificado aqui não cobre esse regime.',
+        )
 
         high_factor_result = calculate_das_advanced(10_000.0, 200_000.0, 60_000.0, 'III_V')
         self.assertIsNone(high_factor_result.get('error'))
@@ -170,12 +214,32 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertEqual(forced_annex_result['annex'], 'II')
         self.assertFalse(forced_annex_result['uses_factor_r'])
 
+    def test_calculate_das_advanced_invalid_forced_annex(self):
+        invalid_forced_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex='INVALID')
+        self.assertIsNone(invalid_forced_result.get('error'))
+        self.assertIn(invalid_forced_result['annex'], {'III', 'V'})
+
+        non_existent_forced_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex='VI')
+        self.assertIsNone(non_existent_forced_result.get('error'))
+        self.assertIn(non_existent_forced_result['annex'], {'III', 'V'})
+
     def test_build_monthly_report_data_includes_insights(self):
         month = datetime.now().strftime('%Y-%m')
         with app.app_context():
             data = build_monthly_report_data(month)
         self.assertIn('insights', data)
         self.assertIsInstance(data['insights'], list)
+        insights = data['insights']
+        self.assertGreater(len(insights), 0)
+
+        for insight in insights:
+            self.assertIsInstance(insight, str)
+            self.assertNotEqual(insight.strip(), '')
+
+        combined_insights = ' '.join(insights).lower()
+        self.assertTrue(
+            any(keyword in combined_insights for keyword in ('margem', 'despesa', 'despesas', 'receita')),
+        )
 
 
 if __name__ == '__main__':
