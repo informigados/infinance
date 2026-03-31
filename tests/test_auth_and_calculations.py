@@ -1,6 +1,6 @@
 import unittest
 from math import isfinite
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app import (
     app,
@@ -35,7 +35,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
                     (
                         cls.username,
                         generate_password_hash(cls.password),
-                        datetime.now().isoformat(timespec='seconds'),
+                        datetime.now(timezone.utc).isoformat(timespec='seconds'),
                     ),
                 )
             else:
@@ -303,7 +303,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             db = get_db()
             db.execute('SAVEPOINT monthly_insights_test')
             try:
-                now = datetime.now().isoformat(timespec='seconds')
+                now = datetime.now(timezone.utc).isoformat(timespec='seconds')
                 client_cursor = db.execute(
                     'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
                     ('Cliente Insights Janeiro', 'PJ', 'Cliente de teste para insights', now),
@@ -398,13 +398,13 @@ class AuthAndCalculationsTest(unittest.TestCase):
     def test_monthly_insights_savepoint_rollback_behavior(self):
         with app.app_context():
             db = get_db()
-            marker = f'Cliente Savepoint Rollback {datetime.now().strftime("%Y%m%d%H%M%S%f")}'
+            marker = f'Cliente Savepoint Rollback {datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")}'
             pre_existing = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
             self.assertEqual(pre_existing, 0)
 
             db.execute('SAVEPOINT monthly_insights_rollback_test')
             try:
-                now = datetime.now().isoformat(timespec='seconds')
+                now = datetime.now(timezone.utc).isoformat(timespec='seconds')
                 db.execute(
                     'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
                     (marker, 'PJ', 'Cliente temporário para testar rollback de savepoint', now),
