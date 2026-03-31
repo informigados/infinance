@@ -126,12 +126,13 @@ class AuthAndCalculationsTest(unittest.TestCase):
         """
         Create a database savepoint and guarantee cleanup.
 
-        The context always RELEASEs the savepoint. It ROLLBACKs when:
+        The context ROLLBACKs when:
         1) an exception is raised inside the block, or
         2) `rollback_on_success` is True.
 
-        RELEASE is always executed in the `finally` block, even when
-        rollback happens, to guarantee consistent cleanup semantics.
+        The `finally` block always executes `RELEASE SAVEPOINT`.
+        When rollback is needed, `ROLLBACK TO SAVEPOINT` runs before
+        `RELEASE SAVEPOINT`.
         """
         safe_name = self._validate_savepoint_name(name)
         db.execute(self._build_savepoint_sql('SAVEPOINT', safe_name))
@@ -156,6 +157,15 @@ class AuthAndCalculationsTest(unittest.TestCase):
 
     @staticmethod
     def _build_savepoint_sql(operation: str, name: str) -> str:
+        """
+        Build savepoint SQL from controlled inputs.
+
+        Safety note: SQLite does not parameterize identifiers such as
+        savepoint names. This helper remains safe because:
+        - `operation` is restricted to an explicit allowlist;
+        - `name` is validated by `_validate_savepoint_name` to only allow
+          `[A-Za-z0-9_]+`.
+        """
         allowed_operations = (
             'SAVEPOINT',
             'ROLLBACK TO SAVEPOINT',
@@ -764,8 +774,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
     def test_savepoint_context_manager_rollback(self):
         with app.app_context():
             db = get_db()
-            marker = f'Cliente_Savepoint_Rollback_{uuid.uuid4()}'
-            pre_existing = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
+            test_client_identifier = f'Cliente_Savepoint_Rollback_{uuid.uuid4()}'
+            pre_existing = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (test_client_identifier,)).fetchone()[0]
             self.assertEqual(pre_existing, 0)
 
             did_raise = False
@@ -774,9 +784,9 @@ class AuthAndCalculationsTest(unittest.TestCase):
                     now = datetime.now(timezone.utc).isoformat(timespec='seconds')
                     db.execute(
                         'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
-                        (marker, 'PJ', 'Cliente temporário para testar rollback de savepoint', now),
+                        (test_client_identifier, 'PJ', 'Cliente temporário para testar rollback de savepoint', now),
                     )
-                    in_savepoint_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
+                    in_savepoint_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (test_client_identifier,)).fetchone()[0]
                     self.assertEqual(in_savepoint_count, 1)
                     raise RuntimeError('force rollback scenario')
             except RuntimeError:
@@ -784,27 +794,27 @@ class AuthAndCalculationsTest(unittest.TestCase):
 
             self.assertTrue(did_raise)
 
-            post_rollback_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
+            post_rollback_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (test_client_identifier,)).fetchone()[0]
             self.assertEqual(post_rollback_count, 0)
 
     def test_savepoint_context_manager_commit(self):
         with app.app_context():
             db = get_db()
-            marker = f'Cliente_Savepoint_Commit_{uuid.uuid4()}'
+            test_client_identifier = f'Cliente_Savepoint_Commit_{uuid.uuid4()}'
             with self.savepoint(db, 'savepoint_commit_cleanup', rollback_on_success=True):
-                pre_existing = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
+                pre_existing = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (test_client_identifier,)).fetchone()[0]
                 self.assertEqual(pre_existing, 0)
 
                 with self.savepoint(db, 'monthly_insights_commit_test'):
                     now = datetime.now(timezone.utc).isoformat(timespec='seconds')
                     db.execute(
                         'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
-                        (marker, 'PJ', 'Cliente temporário para testar commit de savepoint', now),
+                        (test_client_identifier, 'PJ', 'Cliente temporário para testar commit de savepoint', now),
                     )
-                    in_savepoint_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
+                    in_savepoint_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (test_client_identifier,)).fetchone()[0]
                     self.assertEqual(in_savepoint_count, 1)
 
-                post_commit_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
+                post_commit_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (test_client_identifier,)).fetchone()[0]
                 self.assertEqual(post_commit_count, 1)
 
 
