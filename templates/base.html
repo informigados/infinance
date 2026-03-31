@@ -1,0 +1,151 @@
+﻿<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="infinance-favicon" content="{{ asset_url('infinance-icon.svg') }}">
+  <title>{% block title %}INFinance{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" sizes="any" href="{{ asset_url('infinance-icon.svg') }}">
+  <link rel="icon" href="{{ asset_url('infinance-icon.svg') }}">
+  <link rel="shortcut icon" href="{{ asset_url('infinance-icon.svg') }}">
+  <link rel="apple-touch-icon" href="{{ asset_url('infinance-icon.svg') }}">
+  <link rel="stylesheet" href="{{ asset_url('vendor/tailwind.compiled.css') }}">
+  <link rel="stylesheet" href="{{ asset_url('app.css') }}">
+</head>
+<body class="m-0 bg-slate-950 text-slate-100 min-h-screen">
+  <div class="min-h-screen flex flex-col">
+    <header class="border-b border-slate-800 bg-slate-900 sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <a href="{{ url_for('dashboard') if current_user else url_for('login') }}" class="inline-flex items-center gap-3 text-2xl font-bold tracking-tight">
+              <img src="{{ asset_url('infinance-icon.svg') }}" alt="Ícone INFinance" class="w-8 h-8 shrink-0">
+              <span>INFinance</span>
+            </a>
+            <p class="text-sm text-slate-400 mt-1">Controle financeiro e fiscal premium para agências e empresas brasileiras.</p>
+          </div>
+          {% if current_user %}
+          <div class="hidden md:flex items-center gap-2 rounded-xl bg-slate-800/90 border border-slate-700 px-3 py-2 text-xs text-slate-200">
+            <span>{{ current_user.username }}</span>
+            <span class="text-slate-400">·</span>
+            <span class="uppercase">{{ current_user.role }}</span>
+            <form method="post" action="{{ url_for('logout') }}">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="ml-2 px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-100">Sair</button>
+            </form>
+          </div>
+          {% endif %}
+          {% if current_user %}
+          <button id="menu-toggle" type="button" class="md:hidden px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm" aria-expanded="false" aria-controls="mobile-menu-panel" aria-label="Abrir menu">
+            <span class="sr-only">Abrir menu</span>
+            <svg data-menu-icon xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+            <svg data-close-icon xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6l-12 12"></path>
+            </svg>
+          </button>
+          {% endif %}
+        </div>
+
+        {% set nav_base = 'px-3 py-2 rounded-xl transition-colors' %}
+        {% set nav_active = 'bg-emerald-600 text-white' %}
+        {% set nav_idle = 'bg-slate-800 hover:bg-slate-700 text-slate-100' %}
+        {% set nav_mobile_base = 'px-4 py-3 rounded-xl transition-colors w-full text-left text-sm' %}
+
+        {% if current_user %}
+        <nav id="site-nav-desktop" class="hidden md:flex flex-wrap gap-2 text-xs sm:text-sm items-center mt-4">
+          <a href="{{ url_for('dashboard') }}" class="{{ nav_base }} {{ nav_active if current_endpoint == 'dashboard' else nav_idle }}">Dashboard</a>
+          <a href="{{ url_for('company_settings') }}" class="{{ nav_base }} {{ nav_active if current_endpoint == 'company_settings' else nav_idle }}">Empresa</a>
+          <a href="{{ url_for('clients') }}" class="{{ nav_base }} {{ nav_active if current_endpoint in ['clients', 'edit_client'] else nav_idle }}">Clientes</a>
+          <a href="{{ url_for('services') }}" class="{{ nav_base }} {{ nav_active if current_endpoint in ['services', 'edit_service'] else nav_idle }}">Serviços</a>
+          <a href="{{ url_for('transactions') }}" class="{{ nav_base }} {{ nav_active if current_endpoint in ['transactions', 'edit_transaction'] else nav_idle }}">Entradas</a>
+          <a href="{{ url_for('expenses') }}" class="{{ nav_base }} {{ nav_active if current_endpoint in ['expenses', 'edit_expense'] else nav_idle }}">Despesas</a>
+          <a href="{{ url_for('monthly_report') }}" class="{{ nav_base }} {{ nav_active if current_endpoint == 'monthly_report' else nav_idle }}">Relatório</a>
+          <a href="{{ url_for('das_advanced') }}" class="{{ nav_base }} {{ nav_active if current_endpoint == 'das_advanced' else nav_idle }}">DAS/Fator R</a>
+          <a href="{{ url_for('simulator') }}" class="{{ nav_base }} {{ nav_active if current_endpoint == 'simulator' else nav_idle }}">Simulador</a>
+          <a href="{{ url_for('about') }}" class="{{ nav_base }} {{ nav_active if current_endpoint == 'about' else nav_idle }}">Sobre</a>
+          {% if is_admin %}
+          <a href="{{ url_for('users') }}" class="{{ nav_base }} {{ nav_active if current_endpoint in ['users', 'update_user_role', 'reset_user_password', 'update_user_username', 'delete_user'] else nav_idle }}">Usuários</a>
+          {% endif %}
+          <span class="px-3 py-2 rounded-xl border border-emerald-500/50 bg-emerald-500/10 inline-flex items-center gap-2" title="Brasil">
+            <img src="{{ asset_url('images/br-flag.svg') }}" alt="Bandeira do Brasil" class="w-4 h-4">
+            <span>BR</span>
+          </span>
+        </nav>
+        {% endif %}
+      </div>
+    </header>
+
+    {% if current_user %}
+    <div id="mobile-menu-overlay" class="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300 md:hidden"></div>
+    <aside id="mobile-menu-panel" class="fixed top-0 right-0 z-50 h-full w-80 max-w-[86vw] bg-slate-900 border-l border-slate-700 shadow-2xl translate-x-full transition-transform duration-300 md:hidden flex flex-col">
+      <div class="px-4 py-4 border-b border-slate-800 flex items-center justify-between gap-3">
+        <div class="inline-flex items-center gap-2 font-semibold">
+          <img src="{{ asset_url('infinance-icon.svg') }}" alt="Ícone INFinance" class="w-6 h-6 shrink-0">
+          <span>Menu</span>
+        </div>
+        <button id="mobile-menu-close" type="button" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700" aria-label="Fechar menu">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6l-12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <nav class="p-4 flex flex-col gap-2 overflow-y-auto">
+        <a href="{{ url_for('dashboard') }}" class="{{ nav_mobile_base }} {{ nav_active if current_endpoint == 'dashboard' else nav_idle }}">Dashboard</a>
+        <a href="{{ url_for('company_settings') }}" class="{{ nav_mobile_base }} {{ nav_active if current_endpoint == 'company_settings' else nav_idle }}">Empresa</a>
+        <a href="{{ url_for('clients') }}" class="{{ nav_mobile_base }} {{ nav_active if current_endpoint in ['clients', 'edit_client'] else nav_idle }}">Clientes</a>
+        <a href="{{ url_for('services') }}" class="{{ nav_mobile_base }} {{ nav_active if current_endpoint in ['services', 'edit_service'] else nav_idle }}">Serviços</a>
+        <a href="{{ url_for('transactions') }}" class="{{ nav_mobile_base }} {{ nav_active if current_endpoint in ['transactions', 'edit_transaction'] else nav_idle }}">Entradas</a>
+        <a href="{{ url_for('expenses') }}" class="{{ nav_mobile_base }} {{ nav_active if current_endpoint in ['expenses', 'edit_expense'] else nav_idle }}">Despesas</a>
+        <a href="{{ url_for('monthly_report') }}" class="{{ nav_mobile_base }} {{ nav_active if current_endpoint == 'monthly_report' else nav_idle }}">Relatório</a>
+        <a href="{{ url_for('das_advanced') }}" class="{{ nav_mobile_base }} {{ nav_active if current_endpoint == 'das_advanced' else nav_idle }}">DAS/Fator R</a>
+        <a href="{{ url_for('simulator') }}" class="{{ nav_mobile_base }} {{ nav_active if current_endpoint == 'simulator' else nav_idle }}">Simulador</a>
+        <a href="{{ url_for('about') }}" class="{{ nav_mobile_base }} {{ nav_active if current_endpoint == 'about' else nav_idle }}">Sobre</a>
+        {% if is_admin %}
+        <a href="{{ url_for('users') }}" class="{{ nav_mobile_base }} {{ nav_active if current_endpoint in ['users', 'update_user_role', 'reset_user_password', 'update_user_username', 'delete_user'] else nav_idle }}">Usuários</a>
+        {% endif %}
+        <span class="px-4 py-3 rounded-xl border border-emerald-500/50 bg-emerald-500/10 text-slate-100 text-sm inline-flex items-center gap-2">
+          <img src="{{ asset_url('images/br-flag.svg') }}" alt="Bandeira do Brasil" class="w-4 h-4">
+          <span>Brasil</span>
+        </span>
+        <form method="post" action="{{ url_for('logout') }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="{{ nav_mobile_base }} {{ nav_idle }}">Sair</button>
+        </form>
+      </nav>
+    </aside>
+    {% endif %}
+
+    {% set main_classes = 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex-1 w-full' %}
+    {% if current_endpoint == 'login' %}
+      {% set main_classes = main_classes + ' flex flex-col justify-center py-10' %}
+    {% else %}
+      {% set main_classes = main_classes + ' py-8' %}
+    {% endif %}
+    <main class="{{ main_classes }}">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="space-y-3 mb-6">
+            {% for category, message in messages %}
+              {% set style = 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' if category == 'success' else 'border-rose-500/40 bg-rose-500/10 text-rose-200' %}
+              <div class="rounded-2xl border px-4 py-3 {{ style }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="border-t border-slate-800 mt-10">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-sm text-slate-400 space-y-1">
+        <p>{{ now_year }} © INFinance. Todos os Direitos Reservados.</p>
+        <p>Projetado por <a href="https://informigados.com.br" target="_blank" rel="noopener noreferrer" class="text-emerald-300 hover:text-emerald-200 underline underline-offset-2">INformigados</a>.</p>
+      </div>
+    </footer>
+  </div>
+
+  <script src="{{ asset_url('app.js') }}" defer></script>
+</body>
+</html>

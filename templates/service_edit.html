@@ -1,0 +1,59 @@
+﻿{% extends 'base.html' %}
+{% block title %}Editar Serviço · INFinance{% endblock %}
+{% block content %}
+<section class="w-full rounded-3xl bg-slate-900 border border-slate-800 p-6">
+  <h1 class="if-form-title">Editar serviço</h1>
+  <p class="if-form-subtitle">Ajuste alíquota, anexo, CNAE e parâmetros fiscais para manter o cálculo tributário preciso.</p>
+  <form method="post" class="if-form space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div>
+      <label class="block text-sm text-slate-300 mb-2">Nome do serviço</label>
+      <input name="name" value="{{ service.name }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+    </div>
+    <div>
+      <label class="block text-sm text-slate-300 mb-2">Tipo</label>
+      <select name="service_type" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+        {% for key, value in SERVICE_TYPES.items() %}
+          <option value="{{ key }}" {% if service.service_type == key %}selected{% endif %}>{{ value.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="grid md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Alíquota (%)</label>
+        <input type="number" step="0.01" min="0" name="tax_rate" value="{{ (service.tax_rate * 100)|round(2) }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Anexo Simples</label>
+        <select name="annex" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+          {% for key, label in ANNEX_OPTIONS.items() %}
+            <option value="{{ key }}" {% if service.annex == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div>
+      <label class="block text-sm text-slate-300 mb-2">CNAE</label>
+      <input name="cnae" value="{{ service.cnae or '' }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+    </div>
+    <div>
+      <label class="block text-sm text-slate-300 mb-2">Descrição do CNAE</label>
+      <textarea name="cnae_description" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none min-h-24">{{ service.cnae_description or '' }}</textarea>
+    </div>
+    <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+      <label class="inline-flex items-center gap-3">
+        <input type="checkbox" name="factor_r_applicable" class="w-4 h-4 rounded border-slate-700 bg-slate-900" {% if service.factor_r_applicable %}checked{% endif %}>
+        <span>Atividade pode usar Fator R</span>
+      </label>
+    </div>
+    <div>
+      <label class="block text-sm text-slate-300 mb-2">Descrição padrão da nota</label>
+      <textarea name="description_template" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none min-h-36">{{ service.description_template or '' }}</textarea>
+    </div>
+    <div class="if-actions">
+      <button type="submit" class="if-btn if-btn-primary if-btn-block">Salvar alterações</button>
+      <a href="{{ url_for('services') }}" class="if-btn if-btn-secondary if-btn-block">Voltar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

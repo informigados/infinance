@@ -1,0 +1,47 @@
+﻿{% extends 'base.html' %}
+{% block title %}Editar Despesa · INFinance{% endblock %}
+{% block content %}
+<section class="w-full rounded-3xl bg-slate-900 border border-slate-800 p-6">
+  <h1 class="if-form-title">Editar despesa</h1>
+  <p class="if-form-subtitle">Mantenha categorias, valores e datas atualizados para um relatório mensal mais confiável.</p>
+  <form method="post" class="if-form space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div>
+      <label class="block text-sm text-slate-300 mb-2">Descrição</label>
+      <input name="description" value="{{ expense.description }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+    </div>
+    <div>
+      <label class="block text-sm text-slate-300 mb-2">Categoria</label>
+      <select name="category" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+        {% for key, label in EXPENSE_CATEGORIES.items() %}
+          <option value="{{ key }}" {% if expense.category == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="grid md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Valor</label>
+        <input type="number" step="0.01" min="0.01" name="amount" value="{{ expense.amount }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Data</label>
+        <input type="date" name="date_incurred" value="{{ expense.date_incurred }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+      </div>
+    </div>
+    <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+      <label class="inline-flex items-center gap-3">
+        <input type="checkbox" name="is_fixed" class="w-4 h-4 rounded border-slate-700 bg-slate-900" {% if expense.is_fixed %}checked{% endif %}>
+        <span>Despesa fixa mensal</span>
+      </label>
+    </div>
+    <div>
+      <label class="block text-sm text-slate-300 mb-2">Observações</label>
+      <textarea name="notes" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none min-h-28">{{ expense.notes or '' }}</textarea>
+    </div>
+    <div class="if-actions">
+      <button type="submit" class="if-btn if-btn-primary if-btn-block">Salvar alterações</button>
+      <a href="{{ url_for('expenses') }}" class="if-btn if-btn-secondary if-btn-block">Voltar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Sobre · INFinance{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-6 overflow-hidden relative">
+    <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-500"></div>
+    <div class="grid lg:grid-cols-[auto,1fr] gap-5 items-start">
+      <div class="w-16 h-16 rounded-2xl bg-slate-950 border border-slate-800 p-3 flex items-center justify-center">
+        <img src="{{ asset_url('infinance-icon.svg') }}" alt="INFinance" class="w-full h-full object-contain">
+      </div>
+      <div>
+        <h1 class="if-form-title">Sobre o INFinance</h1>
+        <p class="if-form-subtitle">Plataforma de controle financeiro e fiscal para empresas brasileiras, com foco em produtividade operacional, clareza tributária e relatórios acionáveis.</p>
+      </div>
+    </div>
+    <div class="mt-6 grid md:grid-cols-3 gap-4">
+      <article class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+        <p class="text-emerald-300 text-sm font-semibold">Somente leitura de dados</p>
+        <p class="text-slate-400 text-sm mt-2">As análises não alteram as informações de origem durante varreduras e exportações.</p>
+      </article>
+      <article class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+        <p class="text-amber-300 text-sm font-semibold">Performance operacional</p>
+        <p class="text-slate-400 text-sm mt-2">Fluxo otimizado para registrar receitas, despesas e consolidar o resultado mensal rapidamente.</p>
+      </article>
+      <article class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+        <p class="text-violet-300 text-sm font-semibold">Código aberto</p>
+        <p class="text-slate-400 text-sm mt-2">Projeto em evolução contínua, com histórico de melhorias e governança técnica transparente.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="text-xl font-semibold">Autores</h2>
+    <div class="grid md:grid-cols-2 gap-4">
+      {% for author in authors %}
+      <article class="rounded-3xl bg-slate-900 border border-slate-800 p-5 flex gap-4 items-start">
+        <div class="relative w-16 h-16 shrink-0">
+          <img
+            src="{{ asset_url(author.image) }}"
+            alt="{{ author.name }}"
+            class="w-16 h-16 rounded-2xl object-cover border border-slate-700 bg-slate-950"
+            data-author-avatar-image
+          >
+          <div class="hidden absolute inset-0 rounded-2xl border border-slate-700 bg-slate-950 text-slate-200 text-lg font-bold items-center justify-center" data-author-avatar-fallback>
+            {{ author.initials }}
+          </div>
+        </div>
+        <div class="min-w-0">
+          <h3 class="text-lg font-semibold">{{ author.name }}</h3>
+          <p class="text-sm text-slate-400 mt-1">{{ author.role }}</p>
+          <a href="{{ author.github_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex mt-3 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm text-slate-200">{{ author.github_display }}</a>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-6 text-center">
+    <h2 class="text-2xl font-bold">Quer participar do projeto?</h2>
+    <p class="text-slate-400 mt-3 max-w-3xl mx-auto">INFinance é aberto para contribuições técnicas, melhorias visuais, ajustes fiscais e automações operacionais. Toda colaboração é bem-vinda.</p>
+    <a href="https://github.com/informigados/infinance" target="_blank" rel="noopener noreferrer" class="if-btn if-btn-primary mt-5">Contribuir no GitHub</a>
+  </section>
+</div>
+{% endblock %}

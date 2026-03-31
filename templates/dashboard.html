@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard · INFinance{% endblock %}
+{% block content %}
+<div class="space-y-8">
+  {% set result_positive = month_data.profit_after_expenses >= 0 %}
+  <section>
+    <h1 class="text-3xl font-bold">Painel executivo</h1>
+    <p class="text-slate-400 mt-2">Visão consolidada de entradas, saídas, impostos estimados e resultado operacional.</p>
+    <p class="text-slate-500 mt-1 text-sm">{{ company.company_name }} · {{ company.employees_count }} funcionário(s) · {{ company.tax_regime }}</p>
+  </section>
+
+  <section class="grid sm:grid-cols-2 xl:grid-cols-5 gap-4">
+    <div class="sm:col-span-2 xl:col-span-5">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Acumulado total</p>
+    </div>
+    <div class="rounded-3xl bg-slate-900 border border-slate-800 p-5">
+      <p class="text-slate-400 text-sm">Receita bruta</p>
+      <p class="text-3xl font-bold mt-2">{{ totals.gross_total|currency }}</p>
+    </div>
+    <div class="rounded-3xl bg-slate-900 border border-slate-800 p-5">
+      <p class="text-slate-400 text-sm">Impostos estimados</p>
+      <p class="text-3xl font-bold mt-2">{{ totals.total_tax_total|currency }}</p>
+    </div>
+    <div class="rounded-3xl bg-slate-900 border border-slate-800 p-5">
+      <p class="text-slate-400 text-sm">Receita líquida</p>
+      <p class="text-3xl font-bold mt-2">{{ totals.net_total|currency }}</p>
+    </div>
+    <div class="rounded-3xl bg-slate-900 border border-slate-800 p-5">
+      <p class="text-slate-400 text-sm">Despesas do mês</p>
+      <p class="text-3xl font-bold mt-2">{{ month_data.expense_total|currency }}</p>
+    </div>
+    <div class="rounded-3xl {{ 'bg-emerald-950 border-emerald-800' if result_positive else 'bg-rose-950 border-rose-800' }} border p-5">
+      <p class="{{ 'text-emerald-300' if result_positive else 'text-rose-300' }} text-sm">Resultado do mês</p>
+      <p class="text-3xl font-bold mt-2 {{ 'text-white' if result_positive else 'text-rose-200' }}">{{ month_data.profit_after_expenses|currency }}</p>
+    </div>
+  </section>
+
+  <section class="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div class="rounded-3xl bg-slate-900 border border-slate-800 p-5">
+      <p class="text-slate-400 text-sm">Recebido via PJ</p>
+      <p class="text-2xl font-bold mt-2">{{ totals.pj_total|currency }}</p>
+    </div>
+    <div class="rounded-3xl bg-slate-900 border border-slate-800 p-5">
+      <p class="text-slate-400 text-sm">Recebido via PF</p>
+      <p class="text-2xl font-bold mt-2">{{ totals.pf_total|currency }}</p>
+    </div>
+    <div class="rounded-3xl bg-slate-900 border border-slate-800 p-5">
+      <p class="text-slate-400 text-sm">Notas emitidas</p>
+      <p class="text-2xl font-bold mt-2">{{ totals.invoice_count }}</p>
+    </div>
+    <div class="rounded-3xl bg-slate-900 border border-slate-800 p-5">
+      <p class="text-slate-400 text-sm">Base ativa</p>
+      <p class="text-xl font-bold mt-2">{{ client_total }} clientes</p>
+      <p class="text-slate-400">{{ service_total }} serviços · {{ expense_total_count }} despesas</p>
+    </div>
+  </section>
+
+  <section class="grid lg:grid-cols-3 gap-4">
+    <div class="rounded-3xl bg-slate-900 border border-slate-800 p-5 lg:col-span-1">
+      <h2 class="text-xl font-semibold">Mês atual</h2>
+      <div class="mt-4 space-y-3 text-sm">
+        <div class="flex justify-between"><span class="text-slate-400">Bruto</span><strong>{{ month_data.income_totals.gross_total|currency }}</strong></div>
+        <div class="flex justify-between"><span class="text-slate-400">Impostos</span><strong>{{ month_data.income_totals.total_tax_total|currency }}</strong></div>
+        <div class="flex justify-between"><span class="text-slate-400">Líquido</span><strong>{{ month_data.income_totals.net_total|currency }}</strong></div>
+        <div class="flex justify-between"><span class="text-slate-400">Despesas</span><strong>{{ month_data.expense_total|currency }}</strong></div>
+        <div class="flex justify-between {{ 'text-emerald-300' if result_positive else 'text-rose-300' }}"><span>Resultado</span><strong>{{ month_data.profit_after_expenses|currency }}</strong></div>
+      </div>
+    </div>
+    <div class="rounded-3xl bg-slate-900 border border-slate-800 p-5 lg:col-span-2">
+      <h2 class="text-xl font-semibold">Acesso rápido</h2>
+      <div class="mt-4 grid sm:grid-cols-2 gap-4 text-sm text-slate-300">
+        <a href="{{ url_for('company_settings') }}" class="rounded-2xl bg-slate-800/70 p-4 hover:bg-slate-800">
+          <p class="font-semibold text-white">Configurar empresa</p>
+          <p class="mt-2">Atualize equipe, folha e dados corporativos para simulações mais precisas.</p>
+        </a>
+        <a href="{{ url_for('transactions') }}" class="rounded-2xl bg-slate-800/70 p-4 hover:bg-slate-800">
+          <p class="font-semibold text-white">Gerenciar entradas</p>
+          <p class="mt-2">Inclua, ajuste e exclua movimentações de receita com impostos estimados.</p>
+        </a>
+        <a href="{{ url_for('expenses') }}" class="rounded-2xl bg-slate-800/70 p-4 hover:bg-slate-800">
+          <p class="font-semibold text-white">Gerenciar despesas</p>
+          <p class="mt-2">Controle custos fixos e variáveis para acompanhar margem real.</p>
+        </a>
+        <a href="{{ url_for('monthly_report') }}" class="rounded-2xl bg-slate-800/70 p-4 hover:bg-slate-800">
+          <p class="font-semibold text-white">Relatório mensal</p>
+          <p class="mt-2">Visualize o consolidado e exporte para CSV, XLSX, TXT e PDF.</p>
+        </a>
+        <a href="{{ url_for('das_advanced') }}" class="rounded-2xl bg-slate-800/70 p-4 hover:bg-slate-800 sm:col-span-2">
+          <p class="font-semibold text-white">DAS/Fator R avançado</p>
+          <p class="mt-2">Simule anexos e alíquota efetiva com base no RBT12 e na folha acumulada.</p>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5">
+    <h2 class="text-xl font-semibold">Insights automáticos do mês</h2>
+    <div class="mt-3 space-y-2 text-sm text-slate-300">
+      {% for insight in month_data.insights %}
+      <p>- {{ insight }}</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5 overflow-hidden">
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <div>
+        <h2 class="text-xl font-semibold">Últimas entradas</h2>
+        <p class="text-slate-400 text-sm mt-1">Histórico consolidado com impacto fiscal estimado.</p>
+      </div>
+      <a href="{{ url_for('transactions') }}" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm">Nova entrada</a>
+    </div>
+
+    <div class="overflow-x-auto mt-5">
+      <table class="w-full text-sm min-w-[760px]">
+        <thead>
+          <tr class="text-left text-slate-400 border-b border-slate-800">
+            <th class="py-3 pr-4">Data</th>
+            <th class="py-3 pr-4">Cliente</th>
+            <th class="py-3 pr-4">Serviço</th>
+            <th class="py-3 pr-4">Canal</th>
+            <th class="py-3 pr-4">Bruto</th>
+            <th class="py-3 pr-4">Imposto</th>
+            <th class="py-3 pr-4">Líquido</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in transactions %}
+          <tr class="border-b border-slate-900">
+            <td class="py-3 pr-4">{{ item.date_received }}</td>
+            <td class="py-3 pr-4">{{ item.client_name }}</td>
+            <td class="py-3 pr-4">{{ item.service_name }}</td>
+            <td class="py-3 pr-4">{{ item.channel }}{% if item.invoice_issued %} · NFS-e{% endif %}</td>
+            <td class="py-3 pr-4">{{ item.calc.gross|currency }}</td>
+            <td class="py-3 pr-4">{{ item.calc.total_tax|currency }}</td>
+            <td class="py-3 pr-4 font-semibold">{{ item.calc.net|currency }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="py-6 text-slate-400">Nenhuma entrada cadastrada ainda.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

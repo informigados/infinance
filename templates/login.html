@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Entrar · INFinance{% endblock %}
+{% block content %}
+<section class="w-full max-w-md mx-auto rounded-3xl bg-slate-900 border border-slate-800 p-6">
+  <h1 class="if-form-title">Acesso ao INFinance</h1>
+  <p class="if-form-subtitle">Entre com seu usuário para acessar o painel financeiro.</p>
+
+  <form method="post" class="if-form space-y-4">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="next" value="{{ next_target }}">
+
+    <div>
+      <label class="block text-sm text-slate-300 mb-2">Usuário</label>
+      <input type="text" name="username" autocomplete="username" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+    </div>
+
+    <div>
+      <label class="block text-sm text-slate-300 mb-2">Senha</label>
+      <input type="password" name="password" autocomplete="current-password" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+    </div>
+
+    <button type="submit" class="if-btn if-btn-primary if-btn-block">Entrar</button>
+  </form>
+</section>
+{% endblock %}

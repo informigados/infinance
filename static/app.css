@@ -1,0 +1,132 @@
+html,
+body {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+header {
+  margin-top: 0 !important;
+}
+
+:is(input, select, textarea, button):focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+
+tbody tr:hover {
+  background: rgba(30, 41, 59, 0.45);
+}
+
+.if-form-title {
+  font-size: 1.9rem;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.if-form-subtitle {
+  margin-top: 0.55rem;
+  color: #94a3b8;
+  font-size: 1rem;
+  max-width: 74ch;
+}
+
+.if-form {
+  margin-top: 1.5rem;
+}
+
+.if-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.25rem;
+}
+
+.if-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 1rem;
+  border: 1px solid transparent;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  line-height: 1.1;
+  text-decoration: none;
+  transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.if-btn:hover {
+  transform: translateY(-1px);
+}
+
+.if-btn:active {
+  transform: translateY(0);
+}
+
+.if-btn-block {
+  width: 100%;
+}
+
+.if-btn-sm {
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.78rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.if-btn-primary {
+  background: #059669;
+  border-color: #059669;
+  color: #fff;
+}
+
+.if-btn-primary:hover {
+  background: #10b981;
+  border-color: #10b981;
+}
+
+.if-btn-secondary {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+.if-btn-secondary:hover {
+  background: #334155;
+  border-color: #475569;
+}
+
+.if-btn-warning {
+  background: #d97706;
+  border-color: #d97706;
+  color: #fff;
+}
+
+.if-btn-warning:hover {
+  background: #f59e0b;
+  border-color: #f59e0b;
+}
+
+.if-btn-danger {
+  background: #be123c;
+  border-color: #be123c;
+  color: #fff;
+}
+
+.if-btn-danger:hover {
+  background: #e11d48;
+  border-color: #e11d48;
+}
+
+@media (min-width: 640px) {
+  .if-actions {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .if-actions .if-btn-block {
+    width: auto;
+    min-width: 180px;
+  }
+}

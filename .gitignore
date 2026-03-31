@@ -1,0 +1,74 @@
+# =========================
+# Segredos e ambiente local
+# =========================
+.infinance.secret
+.env
+.env.*
+!.env.example
+
+# =========================
+# Banco de dados local
+# (mantém seu banco no PC e evita subir dados para o GitHub)
+# =========================
+infinance.db
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+# =========================
+# Ambientes virtuais
+# =========================
+.venv/
+venv/
+env/
+
+# =========================
+# Python cache/artefatos
+# =========================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# =========================
+# Logs e arquivos temporários
+# =========================
+*.log
+logs/
+analises/
+.cache/
+.tmp/
+qa_server.err.log
+qa_server.out.log
+qa_run.err.log
+qa_run.out.log
+qa_run_venv.err.log
+qa_run_venv.out.log
+qa_html/
+qa_report/
+node_modules/
+.npm-cache/
+
+# =========================
+# IDE / SO
+# =========================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini

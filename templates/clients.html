@@ -1,0 +1,91 @@
+﻿{% extends 'base.html' %}
+{% block title %}Clientes · INFinance{% endblock %}
+{% block content %}
+<div class="grid lg:grid-cols-[380px,1fr] gap-6 mt-2">
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5 h-fit">
+    <h1 class="if-form-title">Novo cliente</h1>
+    <p class="if-form-subtitle">Cadastre clientes PF e PJ com observações úteis para operação e histórico de relacionamento.</p>
+    <form method="post" class="if-form space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Nome</label>
+        <input name="name" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" placeholder="Ex.: Empresa X ou João da Silva" required>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Tipo</label>
+        <select name="person_type" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+          <option value="PF">Pessoa Física</option>
+          <option value="PJ">Pessoa Jurídica</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Observações</label>
+        <textarea name="notes" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none min-h-28" placeholder="Notas úteis sobre o cliente"></textarea>
+      </div>
+      <button type="submit" class="if-btn if-btn-primary if-btn-block">Salvar cliente</button>
+    </form>
+  </section>
+
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5 overflow-hidden">
+    <h2 class="text-2xl font-bold">Clientes cadastrados</h2>
+    <form method="get" class="mt-3 flex items-end gap-2 flex-wrap text-sm">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Buscar cliente</label>
+        <input type="text" name="q" value="{{ search_query }}" placeholder="Nome ou observação" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 outline-none w-72 max-w-full">
+      </div>
+      <button type="submit" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Buscar</button>
+      {% if search_query %}
+      <a href="{{ url_for('clients') }}" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Limpar</a>
+      {% endif %}
+    </form>
+    <div class="overflow-x-auto mt-5">
+      <table class="w-full text-sm min-w-[760px]">
+        <thead>
+          <tr class="text-left text-slate-400 border-b border-slate-800">
+            <th class="py-3 pr-4">ID</th>
+            <th class="py-3 pr-4">Nome</th>
+            <th class="py-3 pr-4">Tipo</th>
+            <th class="py-3 pr-4">Observações</th>
+            <th class="py-3 pr-4">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for client in clients %}
+          <tr class="border-b border-slate-900 align-top">
+            <td class="py-3 pr-4">{{ client.id }}</td>
+            <td class="py-3 pr-4 font-semibold">{{ client.name }}</td>
+            <td class="py-3 pr-4">{{ client.person_type }}</td>
+            <td class="py-3 pr-4 text-slate-400">{{ client.notes or '—' }}</td>
+            <td class="py-3 pr-4">
+              <div class="flex gap-2 flex-wrap">
+                <a href="{{ url_for('edit_client', client_id=client.id) }}" class="if-btn if-btn-sm if-btn-warning">Editar</a>
+                <form method="post" action="{{ url_for('delete_client', client_id=client.id) }}" data-confirm="Excluir cliente {{ client.name }}?">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="if-btn if-btn-sm if-btn-danger">Excluir</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="py-6 text-slate-400">Nenhum cliente cadastrado.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="mt-4 flex items-center justify-between gap-3 flex-wrap text-sm">
+      <p class="text-slate-400">Página {{ pagination.current_page }} de {{ pagination.total_pages }} · {{ pagination.total_items }} registro(s)</p>
+      <div class="flex gap-2 items-center">
+        {% if pagination.has_prev %}
+        <a href="{{ url_for('clients', q=search_query or None, page=pagination.prev_page) }}" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Anterior</a>
+        {% endif %}
+        {% for page_number in pagination.pages %}
+        <a href="{{ url_for('clients', q=search_query or None, page=page_number) }}" class="px-3 py-2 rounded-xl {{ 'bg-emerald-600 text-white' if page_number == pagination.current_page else 'bg-slate-800 hover:bg-slate-700 text-slate-100' }}">{{ page_number }}</a>
+        {% endfor %}
+        {% if pagination.has_next %}
+        <a href="{{ url_for('clients', q=search_query or None, page=pagination.next_page) }}" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Próxima</a>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,158 @@
+﻿{% extends 'base.html' %}
+{% block title %}Entradas · INFinance{% endblock %}
+{% block content %}
+<div class="grid xl:grid-cols-[460px,1fr] gap-6 mt-2">
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5 h-fit">
+    <h1 class="if-form-title">Nova entrada</h1>
+    <p class="if-form-subtitle">Registre recebimentos e mantenha impostos estimados, status e notas sempre sincronizados.</p>
+    <form method="post" class="if-form space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Cliente</label>
+        <select name="client_id" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+          <option value="">Selecione</option>
+          {% for client in clients %}
+          <option value="{{ client.id }}">{{ client.name }} ({{ client.person_type }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Serviço</label>
+        <select name="service_id" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+          <option value="">Selecione</option>
+          {% for service in services %}
+          <option value="{{ service.id }}">{{ service.name }} · {{ service.tax_rate|percent }} · {{ service.cnae or 'sem CNAE' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm text-slate-300 mb-2">Valor recebido</label>
+          <input type="number" step="0.01" min="0.01" name="amount" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+        </div>
+        <div>
+          <label class="block text-sm text-slate-300 mb-2">Data</label>
+          <input type="date" name="date_received" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Canal de recebimento</label>
+        <select name="channel" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+          <option value="PJ">PJ</option>
+          <option value="PF">PF</option>
+        </select>
+      </div>
+      <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4 space-y-3">
+        <label class="inline-flex items-center gap-3">
+          <input type="checkbox" name="invoice_issued" class="w-4 h-4 rounded border-slate-700 bg-slate-900">
+          <span>Nota emitida</span>
+        </label>
+        <input name="invoice_number" class="w-full rounded-2xl bg-slate-900 border border-slate-700 px-4 py-3 outline-none" placeholder="Número da nota (opcional)">
+        <textarea name="invoice_description" class="w-full rounded-2xl bg-slate-900 border border-slate-700 px-4 py-3 outline-none min-h-28" placeholder="Descrição usada na nota (opcional)"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Imposto PF estimado</label>
+        <input type="number" step="0.01" min="0" name="expected_pf_tax" value="0" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Status</label>
+        <select name="status" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+          {% for key, label in TRANSACTION_STATUS.items() %}
+            <option value="{{ key }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Observações</label>
+        <textarea name="notes" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none min-h-28" placeholder="Algo importante sobre esta entrada"></textarea>
+      </div>
+      <button type="submit" class="if-btn if-btn-primary if-btn-block">Salvar entrada</button>
+    </form>
+  </section>
+
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5 overflow-hidden">
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <div>
+        <h2 class="text-2xl font-bold">Entradas registradas</h2>
+        <form method="get" class="mt-2 flex items-end gap-2 flex-wrap text-sm">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Filtro por mês</label>
+            <input type="month" name="month" value="{{ selected_month }}" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Buscar</label>
+            <input type="text" name="q" value="{{ search_query }}" placeholder="Cliente, serviço, nota ou observação" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 outline-none w-72 max-w-full">
+          </div>
+          <button type="submit" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Aplicar</button>
+          {% if selected_month or search_query %}
+          <a href="{{ url_for('transactions') }}" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Limpar</a>
+          {% endif %}
+        </form>
+      </div>
+      <div class="flex gap-2 flex-wrap">
+        <a href="{{ url_for('export_transactions_csv', month=selected_month) if selected_month else url_for('export_transactions_csv') }}" data-loading-link data-loading-text="Gerando CSV..." class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">CSV</a>
+        <a href="{{ url_for('export_transactions_xlsx', month=selected_month) if selected_month else url_for('export_transactions_xlsx') }}" data-loading-link data-loading-text="Gerando XLSX..." class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">XLSX</a>
+        <a href="{{ url_for('export_transactions_txt', month=selected_month) if selected_month else url_for('export_transactions_txt') }}" data-loading-link data-loading-text="Gerando TXT..." class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">TXT</a>
+        <a href="{{ url_for('export_transactions_pdf', month=selected_month) if selected_month else url_for('export_transactions_pdf') }}" data-loading-link data-loading-text="Gerando PDF..." class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">PDF</a>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto mt-5">
+      <table class="w-full text-sm min-w-[1024px]">
+        <thead>
+          <tr class="text-left text-slate-400 border-b border-slate-800">
+            <th class="py-3 pr-4">Data</th>
+            <th class="py-3 pr-4">Cliente</th>
+            <th class="py-3 pr-4">Serviço</th>
+            <th class="py-3 pr-4">Canal</th>
+            <th class="py-3 pr-4">Status</th>
+            <th class="py-3 pr-4">Bruto</th>
+            <th class="py-3 pr-4">Imposto</th>
+            <th class="py-3 pr-4">Líquido</th>
+            <th class="py-3 pr-4">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in transactions %}
+          <tr class="border-b border-slate-900 align-top">
+            <td class="py-3 pr-4">{{ item.date_received }}</td>
+            <td class="py-3 pr-4 font-semibold">{{ item.client_name }}</td>
+            <td class="py-3 pr-4">{{ item.service_name }}<div class="text-xs text-slate-500">{{ item.cnae or 'sem CNAE' }}</div></td>
+            <td class="py-3 pr-4">{{ item.channel }}{% if item.invoice_issued %}<div class="text-xs text-emerald-400">Nota {{ item.invoice_number or 'emitida' }}</div>{% endif %}</td>
+            <td class="py-3 pr-4">{{ TRANSACTION_STATUS[item.status] if item.status in TRANSACTION_STATUS else item.status }}</td>
+            <td class="py-3 pr-4">{{ item.calc.gross|currency }}</td>
+            <td class="py-3 pr-4">{{ item.calc.total_tax|currency }}<div class="text-xs text-slate-500">{{ item.calc.effective_rate }}%</div></td>
+            <td class="py-3 pr-4 font-semibold">{{ item.calc.net|currency }}</td>
+            <td class="py-3 pr-4">
+              <div class="flex gap-2 flex-wrap">
+                <a href="{{ url_for('edit_transaction', transaction_id=item.id) }}" class="if-btn if-btn-sm if-btn-warning">Editar</a>
+                <form method="post" action="{{ url_for('delete_transaction', transaction_id=item.id) }}" data-confirm="Excluir esta entrada?">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="if-btn if-btn-sm if-btn-danger">Excluir</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="9" class="py-6 text-slate-400">Nenhuma entrada cadastrada ainda.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="mt-4 flex items-center justify-between gap-3 flex-wrap text-sm">
+      <p class="text-slate-400">Página {{ pagination.current_page }} de {{ pagination.total_pages }} · {{ pagination.total_items }} registro(s)</p>
+      <div class="flex gap-2 items-center">
+        {% if pagination.has_prev %}
+        <a href="{{ url_for('transactions', month=selected_month or None, q=search_query or None, page=pagination.prev_page) }}" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Anterior</a>
+        {% endif %}
+        {% for page_number in pagination.pages %}
+        <a href="{{ url_for('transactions', month=selected_month or None, q=search_query or None, page=page_number) }}" class="px-3 py-2 rounded-xl {{ 'bg-emerald-600 text-white' if page_number == pagination.current_page else 'bg-slate-800 hover:bg-slate-700 text-slate-100' }}">{{ page_number }}</a>
+        {% endfor %}
+        {% if pagination.has_next %}
+        <a href="{{ url_for('transactions', month=selected_month or None, q=search_query or None, page=pagination.next_page) }}" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Próxima</a>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{
+  "name": "infinance",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Build de CSS compilado do INFinance",
+  "scripts": {
+    "build:css": "tailwindcss -c tailwind.config.js -i ./static/vendor/tailwind.input.css -o ./static/vendor/tailwind.compiled.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.17"
+  }
+}

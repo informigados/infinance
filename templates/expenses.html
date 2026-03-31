@@ -1,0 +1,126 @@
+﻿{% extends 'base.html' %}
+{% block title %}Despesas · INFinance{% endblock %}
+{% block content %}
+<div class="grid xl:grid-cols-[420px,1fr] gap-6 mt-2">
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5 h-fit">
+    <h1 class="if-form-title">Nova despesa</h1>
+    <p class="if-form-subtitle">Controle gastos fixos e variáveis para manter o resultado operacional real do período.</p>
+    <form method="post" class="if-form space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Descrição</label>
+        <input name="description" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" placeholder="Ex.: Assinatura de ferramenta" required>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Categoria</label>
+        <select name="category" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+          {% for key, label in EXPENSE_CATEGORIES.items() %}
+            <option value="{{ key }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm text-slate-300 mb-2">Valor</label>
+          <input type="number" step="0.01" min="0.01" name="amount" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+        </div>
+        <div>
+          <label class="block text-sm text-slate-300 mb-2">Data</label>
+          <input type="date" name="date_incurred" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+        </div>
+      </div>
+      <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+        <label class="inline-flex items-center gap-3">
+          <input type="checkbox" name="is_fixed" class="w-4 h-4 rounded border-slate-700 bg-slate-900">
+          <span>Despesa fixa mensal</span>
+        </label>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Observações</label>
+        <textarea name="notes" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none min-h-28" placeholder="Detalhes da despesa"></textarea>
+      </div>
+      <button type="submit" class="if-btn if-btn-primary if-btn-block">Salvar despesa</button>
+    </form>
+  </section>
+
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5 overflow-hidden">
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <div>
+        <h2 class="text-2xl font-bold">Despesas registradas</h2>
+        <p class="text-sm text-slate-400 mt-1">Total acumulado (filtros atuais): {{ expense_total|currency }}</p>
+        <form method="get" class="mt-2 flex items-end gap-2 flex-wrap text-sm">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Filtro por mês</label>
+            <input type="month" name="month" value="{{ selected_month }}" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Buscar</label>
+            <input type="text" name="q" value="{{ search_query }}" placeholder="Descrição, categoria ou observação" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 outline-none w-72 max-w-full">
+          </div>
+          <button type="submit" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Aplicar</button>
+          {% if selected_month or search_query %}
+          <a href="{{ url_for('expenses') }}" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Limpar</a>
+          {% endif %}
+        </form>
+      </div>
+      <div class="flex gap-2 flex-wrap">
+        <a href="{{ url_for('export_expenses_csv', month=selected_month) if selected_month else url_for('export_expenses_csv') }}" data-loading-link data-loading-text="Gerando CSV..." class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">CSV</a>
+        <a href="{{ url_for('export_expenses_xlsx', month=selected_month) if selected_month else url_for('export_expenses_xlsx') }}" data-loading-link data-loading-text="Gerando XLSX..." class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">XLSX</a>
+        <a href="{{ url_for('export_expenses_txt', month=selected_month) if selected_month else url_for('export_expenses_txt') }}" data-loading-link data-loading-text="Gerando TXT..." class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">TXT</a>
+        <a href="{{ url_for('export_expenses_pdf', month=selected_month) if selected_month else url_for('export_expenses_pdf') }}" data-loading-link data-loading-text="Gerando PDF..." class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">PDF</a>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto mt-5">
+      <table class="w-full text-sm min-w-[860px]">
+        <thead>
+          <tr class="text-left text-slate-400 border-b border-slate-800">
+            <th class="py-3 pr-4">Data</th>
+            <th class="py-3 pr-4">Descrição</th>
+            <th class="py-3 pr-4">Categoria</th>
+            <th class="py-3 pr-4">Valor</th>
+            <th class="py-3 pr-4">Fixa</th>
+            <th class="py-3 pr-4">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in expenses %}
+          <tr class="border-b border-slate-900 align-top">
+            <td class="py-3 pr-4">{{ item.date_incurred }}</td>
+            <td class="py-3 pr-4 font-semibold">{{ item.description }}<div class="text-xs text-slate-500">{{ item.notes or 'sem observações' }}</div></td>
+            <td class="py-3 pr-4">{{ EXPENSE_CATEGORIES[item.category] if item.category in EXPENSE_CATEGORIES else item.category }}</td>
+            <td class="py-3 pr-4">{{ item.amount|currency }}</td>
+            <td class="py-3 pr-4">{{ 'Sim' if item.is_fixed else 'Não' }}</td>
+            <td class="py-3 pr-4">
+              <div class="flex gap-2 flex-wrap">
+                <a href="{{ url_for('edit_expense', expense_id=item.id) }}" class="if-btn if-btn-sm if-btn-warning">Editar</a>
+                <form method="post" action="{{ url_for('delete_expense', expense_id=item.id) }}" data-confirm="Excluir esta despesa?">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="if-btn if-btn-sm if-btn-danger">Excluir</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="py-6 text-slate-400">Nenhuma despesa cadastrada.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="mt-4 flex items-center justify-between gap-3 flex-wrap text-sm">
+      <p class="text-slate-400">Página {{ pagination.current_page }} de {{ pagination.total_pages }} · {{ pagination.total_items }} registro(s)</p>
+      <div class="flex gap-2 items-center">
+        {% if pagination.has_prev %}
+        <a href="{{ url_for('expenses', month=selected_month or None, q=search_query or None, page=pagination.prev_page) }}" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Anterior</a>
+        {% endif %}
+        {% for page_number in pagination.pages %}
+        <a href="{{ url_for('expenses', month=selected_month or None, q=search_query or None, page=page_number) }}" class="px-3 py-2 rounded-xl {{ 'bg-emerald-600 text-white' if page_number == pagination.current_page else 'bg-slate-800 hover:bg-slate-700 text-slate-100' }}">{{ page_number }}</a>
+        {% endfor %}
+        {% if pagination.has_next %}
+        <a href="{{ url_for('expenses', month=selected_month or None, q=search_query or None, page=pagination.next_page) }}" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Próxima</a>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

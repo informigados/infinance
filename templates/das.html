@@ -1,0 +1,109 @@
+﻿{% extends 'base.html' %}
+{% block title %}DAS/Fator R · INFinance{% endblock %}
+{% block content %}
+<div class="grid lg:grid-cols-[440px,1fr] gap-6 mt-2">
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5 h-fit">
+    <h1 class="if-form-title">Modo avançado DAS/Fator R</h1>
+    <p class="if-form-subtitle">Cálculo estimado para anexos I, II, III, IV e V, incluindo regra de Fator R quando necessário.</p>
+
+    <div class="mt-4 rounded-2xl bg-slate-950 border border-slate-800 p-4 text-sm text-slate-300">
+      <p><strong>Empresa:</strong> {{ company.company_name }}</p>
+      <p><strong>Funcionários:</strong> {{ company.employees_count }}</p>
+      <p><strong>Folha + pró-labore mensal:</strong> {{ (company.payroll_monthly + company.prolabore_monthly)|currency }}</p>
+    </div>
+
+    <form method="post" class="if-form space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Receita do mês (R$)</label>
+        <input type="number" step="0.01" min="0" name="monthly_revenue" value="{{ input_data.monthly_revenue }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">RBT12 (últimos 12 meses)</label>
+        <input type="number" step="0.01" min="0" name="rbt12" value="{{ input_data.rbt12 }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Folha + pró-labore (12 meses)</label>
+        <input type="number" step="0.01" min="0" name="payroll_12m" value="{{ input_data.payroll_12m }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+      </div>
+
+      <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4 space-y-3">
+        <div>
+          <label class="block text-sm text-slate-300 mb-2">Modo de anexo</label>
+          <select name="annex_mode" class="w-full rounded-2xl bg-slate-900 border border-slate-700 px-4 py-3 outline-none">
+            {% for key, label in ANNEX_OPTIONS.items() %}
+              <option value="{{ key }}" {% if input_data.annex_mode == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm text-slate-300 mb-2">Forçar anexo específico (opcional)</label>
+          <select name="forced_annex" class="w-full rounded-2xl bg-slate-900 border border-slate-700 px-4 py-3 outline-none">
+            <option value="" {% if not input_data.forced_annex %}selected{% endif %}>Automático</option>
+            {% for key, label in ANNEX_OPTIONS.items() %}
+              {% if key != 'III_V' %}
+              <option value="{{ key }}" {% if input_data.forced_annex == key %}selected{% endif %}>{{ label }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" class="if-btn if-btn-primary if-btn-block">Calcular DAS</button>
+    </form>
+
+    <p class="text-xs text-slate-500 mt-4">Observação: simulação para apoio gerencial. Valide o fechamento com sua contabilidade.</p>
+  </section>
+
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5">
+    <h2 class="if-form-title">Resultado da simulação</h2>
+    {% if result %}
+      {% if result.error %}
+      <div class="mt-5 rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-rose-200">
+        {{ result.error }}
+      </div>
+      {% else %}
+      <div class="mt-5 grid md:grid-cols-2 gap-4">
+        <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+          <p class="text-slate-400 text-sm">Anexo aplicado</p>
+          <p class="text-3xl font-bold mt-2">{{ result.annex }}</p>
+        </div>
+        <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+          <p class="text-slate-400 text-sm">Fator R</p>
+          <p class="text-3xl font-bold mt-2">{{ (result.factor_r_percent / 100)|percent }}</p>
+        </div>
+        <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+          <p class="text-slate-400 text-sm">Alíquota nominal</p>
+          <p class="text-3xl font-bold mt-2">{{ result.nominal_rate|percent }}</p>
+        </div>
+        <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+          <p class="text-slate-400 text-sm">Alíquota efetiva</p>
+          <p class="text-3xl font-bold mt-2">{{ result.effective_rate|percent }}</p>
+        </div>
+        <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+          <p class="text-slate-400 text-sm">Parcela a deduzir</p>
+          <p class="text-3xl font-bold mt-2">{{ result.deduction|currency }}</p>
+        </div>
+        <div class="rounded-2xl bg-emerald-950 border border-emerald-800 p-4">
+          <p class="text-emerald-200 text-sm">DAS estimado no mês</p>
+          <p class="text-3xl font-bold mt-2 text-white">{{ result.estimated_das|currency }}</p>
+        </div>
+      </div>
+      <div class="mt-5 rounded-2xl bg-slate-950 border border-slate-800 p-4 text-sm text-slate-300 space-y-2">
+        <p><strong>Modo selecionado:</strong> {{ ANNEX_OPTIONS[result.annex_mode] if result.annex_mode in ANNEX_OPTIONS else result.annex_mode }}</p>
+        <p><strong>RBT12:</strong> {{ result.rbt12|currency }}</p>
+        <p><strong>Folha 12m:</strong> {{ result.payroll_12m|currency }}</p>
+        <p><strong>Limite da faixa aplicada:</strong> {{ result.bracket_limit|currency }}</p>
+        {% if result.uses_factor_r %}
+        <p><strong>Valor adicional para atingir Fator R de 28%:</strong> {{ result.target_rate_28_gap|currency }}</p>
+        {% endif %}
+      </div>
+      {% endif %}
+    {% else %}
+      <div class="mt-5 rounded-2xl bg-slate-950 border border-slate-800 p-5 text-slate-400">
+        Preencha os campos para calcular o DAS com o modelo avançado abrangendo todos os anexos.
+      </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,30 @@
+﻿{% extends 'base.html' %}
+{% block title %}Editar Cliente · INFinance{% endblock %}
+{% block content %}
+<section class="w-full rounded-3xl bg-slate-900 border border-slate-800 p-6">
+  <h1 class="if-form-title">Editar cliente</h1>
+  <p class="if-form-subtitle">Atualize os dados cadastrais para manter a base de clientes consistente e confiável.</p>
+  <form method="post" class="if-form space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div>
+      <label class="block text-sm text-slate-300 mb-2">Nome</label>
+      <input name="name" value="{{ client.name }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+    </div>
+    <div>
+      <label class="block text-sm text-slate-300 mb-2">Tipo</label>
+      <select name="person_type" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+        <option value="PF" {% if client.person_type == 'PF' %}selected{% endif %}>Pessoa Física</option>
+        <option value="PJ" {% if client.person_type == 'PJ' %}selected{% endif %}>Pessoa Jurídica</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm text-slate-300 mb-2">Observações</label>
+      <textarea name="notes" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none min-h-28">{{ client.notes or '' }}</textarea>
+    </div>
+    <div class="if-actions">
+      <button type="submit" class="if-btn if-btn-primary if-btn-block">Salvar alterações</button>
+      <a href="{{ url_for('clients') }}" class="if-btn if-btn-secondary if-btn-block">Voltar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

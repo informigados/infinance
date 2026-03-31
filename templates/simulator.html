@@ -1,0 +1,88 @@
+﻿{% extends 'base.html' %}
+{% block title %}Simulador · INFinance{% endblock %}
+{% block content %}
+<div class="grid lg:grid-cols-[420px,1fr] gap-6 mt-2">
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5 h-fit">
+    <h1 class="if-form-title">Simulador de entrada</h1>
+    <p class="if-form-subtitle">Teste o impacto fiscal antes de fechar o serviço ou decidir como registrar a entrada.</p>
+    {% if not services %}
+    <div class="mt-5 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-100 text-sm">
+      Nenhum serviço cadastrado. Cadastre um serviço primeiro para utilizar o simulador.
+      <a href="{{ url_for('services') }}" class="underline underline-offset-2 ml-1">Ir para Serviços</a>
+    </div>
+    {% else %}
+    <form method="post" class="if-form space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Serviço</label>
+        <select name="service_id" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+          {% for service in services %}
+          <option value="{{ service.id }}" {% if form_data.service_id and form_data.service_id|int == service.id %}selected{% endif %}>{{ service.name }} · {{ service.tax_rate|percent }} · {{ service.cnae or 'sem CNAE' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Valor</label>
+        <input type="number" step="0.01" min="0" name="amount" value="{{ form_data.amount }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Canal</label>
+        <select name="channel" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+          <option value="PJ" {% if form_data.channel == 'PJ' %}selected{% endif %}>PJ</option>
+          <option value="PF" {% if form_data.channel == 'PF' %}selected{% endif %}>PF</option>
+        </select>
+      </div>
+      <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+        <label class="inline-flex items-center gap-3">
+          <input type="checkbox" name="invoice_issued" class="w-4 h-4 rounded border-slate-700 bg-slate-900" {% if form_data.invoice_issued %}checked{% endif %}>
+          <span>Considerar nota emitida</span>
+        </label>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Imposto PF estimado</label>
+        <input type="number" step="0.01" min="0" name="expected_pf_tax" value="{{ form_data.expected_pf_tax }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+      </div>
+      <button type="submit" class="if-btn if-btn-primary if-btn-block">Simular entrada</button>
+    </form>
+    {% endif %}
+    <a href="{{ url_for('das_advanced') }}" class="mt-4 inline-flex text-sm text-emerald-300 hover:text-emerald-200 underline underline-offset-2">Precisa do DAS/Fator R? Use o modo avançado.</a>
+  </section>
+
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5">
+    <h2 class="if-form-title">Resultado</h2>
+    {% if result %}
+      <div class="mt-5 grid md:grid-cols-2 gap-4">
+        <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+          <p class="text-slate-400 text-sm">Serviço</p>
+          <p class="text-xl font-bold mt-2">{{ result.service_name }}</p>
+          <p class="text-sm text-slate-500 mt-2">CNAE: {{ result.cnae or 'não informado' }} · Anexo: {{ ANNEX_OPTIONS[result.annex] if result.annex in ANNEX_OPTIONS else result.annex }} · Alíquota: {{ result.service_rate_percent }}%</p>
+        </div>
+        <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+          <p class="text-slate-400 text-sm">Bruto</p>
+          <p class="text-3xl font-bold mt-2">{{ result.gross|currency }}</p>
+        </div>
+        <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+          <p class="text-slate-400 text-sm">Imposto NFS-e / PJ</p>
+          <p class="text-3xl font-bold mt-2">{{ result.invoice_tax|currency }}</p>
+        </div>
+        <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+          <p class="text-slate-400 text-sm">Imposto PF estimado</p>
+          <p class="text-3xl font-bold mt-2">{{ result.pf_tax|currency }}</p>
+        </div>
+        <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+          <p class="text-slate-400 text-sm">Imposto total</p>
+          <p class="text-3xl font-bold mt-2">{{ result.total_tax|currency }}</p>
+        </div>
+        <div class="rounded-2xl bg-emerald-950 border border-emerald-800 p-4">
+          <p class="text-emerald-200 text-sm">Líquido estimado</p>
+          <p class="text-3xl font-bold mt-2 text-white">{{ result.net|currency }}</p>
+        </div>
+      </div>
+    {% else %}
+      <div class="mt-5 rounded-2xl bg-slate-950 border border-slate-800 p-5 text-slate-400">
+        Faça uma simulação para ver o impacto do serviço, do canal e da nota no valor líquido.
+      </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

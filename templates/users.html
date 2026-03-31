@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block title %}Usuários · INFinance{% endblock %}
+{% block content %}
+<div class="grid lg:grid-cols-[420px,1fr] gap-6">
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5 h-fit">
+    <h1 class="if-form-title">Novo usuário</h1>
+    <p class="if-form-subtitle">Gestão de acesso com perfis admin, operator e viewer.</p>
+    <form method="post" class="if-form space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Usuário</label>
+        <input type="text" name="username" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+      </div>
+
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Perfil</label>
+        <select name="role" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+          {% for role in VALID_ROLES %}
+          <option value="{{ role }}">{{ role }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Senha inicial</label>
+        <input type="password" name="password" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" minlength="8" required>
+      </div>
+
+      <button type="submit" class="if-btn if-btn-primary if-btn-block">Criar usuário</button>
+    </form>
+  </section>
+
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5 overflow-hidden">
+    <h2 class="text-2xl font-bold">Usuários cadastrados</h2>
+    <p class="text-sm text-slate-400 mt-2">Total: {{ total_users }} usuário(s). O usuário padrão do sistema é protegido.</p>
+    <div class="overflow-x-auto mt-5">
+      <table class="w-full text-sm min-w-[980px]">
+        <thead>
+          <tr class="text-left text-slate-400 border-b border-slate-800">
+            <th class="py-3 pr-4">ID</th>
+            <th class="py-3 pr-4">Usuário</th>
+            <th class="py-3 pr-4">Perfil</th>
+            <th class="py-3 pr-4">Último login</th>
+            <th class="py-3 pr-4">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr class="border-b border-slate-900 align-top">
+            <td class="py-3 pr-4">{{ user.id }}</td>
+            <td class="py-3 pr-4">
+              <form method="post" action="{{ url_for('update_user_username', user_id=user.id) }}" class="flex items-center gap-2">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="text" name="username" value="{{ user.username }}" minlength="3" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 outline-none w-48">
+                <button type="submit" class="if-btn if-btn-sm if-btn-secondary">Renomear</button>
+              </form>
+              {% if user.is_protected %}
+              <div class="mt-2 inline-flex items-center gap-2">
+                <span class="px-2 py-1 rounded-lg border border-amber-500/50 bg-amber-500/10 text-amber-200 text-[11px] font-semibold uppercase tracking-wide">Padrão</span>
+                <p class="text-xs text-amber-300">Usuário padrão protegido</p>
+              </div>
+              {% endif %}
+            </td>
+            <td class="py-3 pr-4">
+              <form method="post" action="{{ url_for('update_user_role', user_id=user.id) }}" class="flex items-center gap-2">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <select name="role" class="rounded-xl bg-slate-950 border border-slate-700 px-2 py-1 outline-none">
+                  {% for role in VALID_ROLES %}
+                  <option value="{{ role }}" {% if user.role == role %}selected{% endif %}>{{ role }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="if-btn if-btn-sm if-btn-warning">Atualizar</button>
+              </form>
+            </td>
+            <td class="py-3 pr-4 text-slate-400">{{ user.last_login_at or 'nunca' }}</td>
+            <td class="py-3 pr-4">
+              <form method="post" action="{{ url_for('reset_user_password', user_id=user.id) }}" class="flex items-center gap-2 mb-2" data-confirm="Redefinir senha do usuário {{ user.username }}?">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="password" name="password" minlength="8" placeholder="Nova senha" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 outline-none">
+                <button type="submit" class="if-btn if-btn-sm if-btn-danger">Redefinir</button>
+              </form>
+              {% if user.can_delete %}
+              <form method="post" action="{{ url_for('delete_user', user_id=user.id) }}" data-confirm="Excluir usuário {{ user.username }}? Esta ação não pode ser desfeita.">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="if-btn if-btn-sm if-btn-danger">Excluir usuário</button>
+              </form>
+              {% elif user.is_protected %}
+              <p class="text-xs text-slate-400">Exclusão bloqueada para usuário padrão.</p>
+              {% else %}
+              <p class="text-xs text-slate-400">Exclusão indisponível para o último usuário.</p>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="py-6 text-slate-400">Nenhum usuário cadastrado.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

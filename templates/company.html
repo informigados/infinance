@@ -1,0 +1,57 @@
+﻿{% extends 'base.html' %}
+{% block title %}Empresa · INFinance{% endblock %}
+{% block content %}
+<section class="w-full rounded-3xl bg-slate-900 border border-slate-800 p-6 mt-2">
+  <h1 class="if-form-title">Configurações da empresa</h1>
+  <p class="if-form-subtitle">Esses dados alimentam simulações tributárias, relatórios inteligentes e operação para equipes com funcionários.</p>
+
+  <form method="post" class="if-form space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="grid md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Nome fantasia</label>
+        <input name="company_name" value="{{ company.company_name }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" required>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Razão social</label>
+        <input name="legal_name" value="{{ company.legal_name or '' }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-4">
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Regime tributário</label>
+        <input name="tax_regime" value="{{ company.tax_regime }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" placeholder="Ex.: Simples Nacional">
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Número de funcionários</label>
+        <input type="number" min="0" name="employees_count" value="{{ company.employees_count }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Folha mensal (R$)</label>
+        <input type="number" step="0.01" min="0" name="payroll_monthly" value="{{ company.payroll_monthly }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Pró-labore mensal (R$)</label>
+        <input type="number" step="0.01" min="0" name="prolabore_monthly" value="{{ company.prolabore_monthly }}" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Atualizado em</label>
+        <input value="{{ company.updated_at }}" class="w-full rounded-2xl bg-slate-900 border border-slate-800 px-4 py-3 outline-none text-slate-400" disabled>
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-sm text-slate-300 mb-2">Observações</label>
+      <textarea name="notes" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none min-h-32">{{ company.notes or '' }}</textarea>
+    </div>
+
+    <div class="if-actions">
+      <button type="submit" class="if-btn if-btn-primary if-btn-block">Salvar configurações</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

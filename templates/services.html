@@ -1,0 +1,128 @@
+﻿{% extends 'base.html' %}
+{% block title %}Serviços · INFinance{% endblock %}
+{% block content %}
+<div class="grid lg:grid-cols-[460px,1fr] gap-6 mt-2">
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5 h-fit">
+    <h1 class="if-form-title">Novo serviço / CNAE</h1>
+    <p class="if-form-subtitle">Configure parâmetros fiscais e operacionais do serviço para cálculo automático e simulações consistentes.</p>
+    <form method="post" class="if-form space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Nome do serviço</label>
+        <input name="name" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" placeholder="Ex.: Gerenciamento de site" required>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Tipo operacional</label>
+        <select name="service_type" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+          {% for key, value in SERVICE_TYPES.items() %}
+            <option value="{{ key }}">{{ value.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm text-slate-300 mb-2">Alíquota (%)</label>
+          <input type="number" step="0.01" min="0" name="tax_rate" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" placeholder="Ex.: 6 ou 15,5" required>
+        </div>
+        <div>
+          <label class="block text-sm text-slate-300 mb-2">Anexo Simples</label>
+          <select name="annex" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none">
+            {% for key, label in ANNEX_OPTIONS.items() %}
+              <option value="{{ key }}" {% if key == 'III_V' %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">CNAE</label>
+        <input name="cnae" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none" placeholder="Ex.: 6319-4/00">
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Descrição do CNAE</label>
+        <textarea name="cnae_description" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none min-h-24" placeholder="Descrição resumida da atividade"></textarea>
+      </div>
+      <div class="rounded-2xl bg-slate-950 border border-slate-800 p-4">
+        <label class="inline-flex items-center gap-3">
+          <input type="checkbox" name="factor_r_applicable" class="w-4 h-4 rounded border-slate-700 bg-slate-900" checked>
+          <span>Atividade pode usar Fator R</span>
+        </label>
+      </div>
+      <div>
+        <label class="block text-sm text-slate-300 mb-2">Descrição padrão da nota</label>
+        <textarea name="description_template" class="w-full rounded-2xl bg-slate-950 border border-slate-700 px-4 py-3 outline-none min-h-32" placeholder="Texto base para a nota fiscal"></textarea>
+      </div>
+      <button type="submit" class="if-btn if-btn-primary if-btn-block">Salvar serviço</button>
+    </form>
+  </section>
+
+  <section class="rounded-3xl bg-slate-900 border border-slate-800 p-5 overflow-hidden">
+    <h2 class="text-2xl font-bold">Serviços cadastrados</h2>
+    <form method="get" class="mt-3 flex items-end gap-2 flex-wrap text-sm">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Buscar serviço/CNAE</label>
+        <input type="text" name="q" value="{{ search_query }}" placeholder="Nome, CNAE ou descrição" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 outline-none w-72 max-w-full">
+      </div>
+      <button type="submit" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Buscar</button>
+      {% if search_query %}
+      <a href="{{ url_for('services') }}" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Limpar</a>
+      {% endif %}
+    </form>
+    <div class="overflow-x-auto mt-5">
+      <table class="w-full text-sm min-w-[860px]">
+        <thead>
+          <tr class="text-left text-slate-400 border-b border-slate-800">
+            <th class="py-3 pr-4">Serviço</th>
+            <th class="py-3 pr-4">CNAE</th>
+            <th class="py-3 pr-4">Anexo</th>
+            <th class="py-3 pr-4">Alíquota</th>
+            <th class="py-3 pr-4">Fator R</th>
+            <th class="py-3 pr-4">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for service in services %}
+          <tr class="border-b border-slate-900 align-top">
+            <td class="py-3 pr-4 font-semibold">
+              {{ service.name }}
+              <div class="text-xs text-slate-500">{{ SERVICE_TYPES[service.service_type].label if service.service_type in SERVICE_TYPES else service.service_type }}</div>
+            </td>
+            <td class="py-3 pr-4">
+              {{ service.cnae or '—' }}
+              <div class="text-xs text-slate-500">{{ service.cnae_description or 'sem descrição' }}</div>
+            </td>
+            <td class="py-3 pr-4">{{ ANNEX_OPTIONS[service.annex] if service.annex in ANNEX_OPTIONS else service.annex }}</td>
+            <td class="py-3 pr-4">{{ service.tax_rate|percent }}</td>
+            <td class="py-3 pr-4">{{ 'Sim' if service.factor_r_applicable else 'Não' }}</td>
+            <td class="py-3 pr-4">
+              <div class="flex gap-2 flex-wrap">
+                <a href="{{ url_for('edit_service', service_id=service.id) }}" class="if-btn if-btn-sm if-btn-warning">Editar</a>
+                <form method="post" action="{{ url_for('delete_service', service_id=service.id) }}" data-confirm="Excluir serviço {{ service.name }}?">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="if-btn if-btn-sm if-btn-danger">Excluir</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="py-6 text-slate-400">Nenhum serviço cadastrado.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="mt-4 flex items-center justify-between gap-3 flex-wrap text-sm">
+      <p class="text-slate-400">Página {{ pagination.current_page }} de {{ pagination.total_pages }} · {{ pagination.total_items }} registro(s)</p>
+      <div class="flex gap-2 items-center">
+        {% if pagination.has_prev %}
+        <a href="{{ url_for('services', q=search_query or None, page=pagination.prev_page) }}" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Anterior</a>
+        {% endif %}
+        {% for page_number in pagination.pages %}
+        <a href="{{ url_for('services', q=search_query or None, page=page_number) }}" class="px-3 py-2 rounded-xl {{ 'bg-emerald-600 text-white' if page_number == pagination.current_page else 'bg-slate-800 hover:bg-slate-700 text-slate-100' }}">{{ page_number }}</a>
+        {% endfor %}
+        {% if pagination.has_next %}
+        <a href="{{ url_for('services', q=search_query or None, page=pagination.next_page) }}" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Próxima</a>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
