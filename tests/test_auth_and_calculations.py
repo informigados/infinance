@@ -407,7 +407,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 now = datetime.now().isoformat(timespec='seconds')
                 db.execute(
                     'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
-                    (marker, 'PJ', 'Cliente temporario para testar rollback de savepoint', now),
+                    (marker, 'PJ', 'Cliente temporário para testar rollback de savepoint', now),
                 )
                 in_savepoint_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
                 self.assertEqual(in_savepoint_count, 1)
