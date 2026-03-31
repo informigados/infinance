@@ -49,9 +49,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
             sess['_csrf_token'] = token
         return token
 
-    def test_login_success_and_logout_flow(self):
-        csrf_token = self.set_csrf('csrf-auth-ok')
-        login_response = self.client.post(
+    def login_with_valid_credentials(self, csrf_token: str):
+        return self.client.post(
             '/login',
             data={
                 '_csrf_token': csrf_token,
@@ -60,6 +59,10 @@ class AuthAndCalculationsTest(unittest.TestCase):
             },
             follow_redirects=False,
         )
+
+    def test_login_success(self):
+        csrf_token = self.set_csrf('csrf-auth-ok')
+        login_response = self.login_with_valid_credentials(csrf_token)
         self.assertEqual(login_response.status_code, 302)
         location = login_response.headers.get('Location', '')
         self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
@@ -68,6 +71,11 @@ class AuthAndCalculationsTest(unittest.TestCase):
             self.assertEqual(sess.get('user_id'), self.user_id)
             self.assertEqual(sess.get('username'), self.username)
             self.assertEqual(sess.get('role'), 'viewer')
+
+    def test_logout_flow(self):
+        csrf_token = self.set_csrf('csrf-auth-ok')
+        login_response = self.login_with_valid_credentials(csrf_token)
+        self.assertEqual(login_response.status_code, 302)
 
         logout_response = self.client.post(
             '/logout',
@@ -182,7 +190,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertAlmostEqual(result['net'], result['gross'] - result['total_tax'], places=2)
         self.assertAlmostEqual(result['effective_rate'], (result['total_tax'] / gross) * 100, places=2)
 
-    def test_calculate_das_advanced_edge_cases(self):
+    def test_calculate_das_advanced_zero_revenue(self):
         zero_revenue_result = calculate_das_advanced(5000.0, 0.0, 1000.0, 'III_V')
         zero_revenue_error = zero_revenue_result.get('error')
         self.assertIsNotNone(zero_revenue_error)
@@ -191,6 +199,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
             'Informe uma receita bruta acumulada dos últimos 12 meses (RBT12) maior que zero.',
         )
 
+    def test_calculate_das_advanced_over_limit(self):
         over_limit_result = calculate_das_advanced(5000.0, 4_900_000.0, 100_000.0, 'III_V')
         over_limit_error = over_limit_result.get('error')
         self.assertIsNotNone(over_limit_error)
@@ -199,16 +208,19 @@ class AuthAndCalculationsTest(unittest.TestCase):
             'RBT12 acima de R$ 4.800.000,00. O cálculo simplificado aqui não cobre esse regime.',
         )
 
+    def test_calculate_das_advanced_high_factor(self):
         high_factor_result = calculate_das_advanced(10_000.0, 200_000.0, 60_000.0, 'III_V')
         self.assertIsNone(high_factor_result.get('error'))
         self.assertEqual(high_factor_result['annex'], 'III')
         self.assertTrue(high_factor_result['uses_factor_r'])
 
+    def test_calculate_das_advanced_low_factor(self):
         low_factor_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V')
         self.assertIsNone(low_factor_result.get('error'))
         self.assertEqual(low_factor_result['annex'], 'V')
         self.assertTrue(low_factor_result['uses_factor_r'])
 
+    def test_calculate_das_advanced_forced_annex(self):
         forced_annex_result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex='II')
         self.assertIsNone(forced_annex_result.get('error'))
         self.assertEqual(forced_annex_result['annex'], 'II')
@@ -227,19 +239,38 @@ class AuthAndCalculationsTest(unittest.TestCase):
         month = datetime.now().strftime('%Y-%m')
         with app.app_context():
             data = build_monthly_report_data(month)
+        self.assertEqual(data.get('month'), month)
         self.assertIn('insights', data)
         self.assertIsInstance(data['insights'], list)
         insights = data['insights']
-        self.assertGreater(len(insights), 0)
+        self.assertGreaterEqual(len(insights), 2)
 
         for insight in insights:
             self.assertIsInstance(insight, str)
             self.assertNotEqual(insight.strip(), '')
 
-        combined_insights = ' '.join(insights).lower()
-        self.assertTrue(
-            any(keyword in combined_insights for keyword in ('margem', 'despesa', 'despesas', 'receita')),
-        )
+        gross = float(data['income_totals']['gross_total'])
+        expense_total = float(data['expense_total'])
+        net = float(data['income_totals']['net_total'])
+
+        first_insight = insights[0]
+        if gross > 0:
+            self.assertRegex(first_insight, r'^Margem operacional estimada: -?\d+\.\d{2}% sobre a receita bruta do período\.$')
+        else:
+            self.assertEqual(first_insight, 'Sem receita no período para cálculo de margem operacional.')
+
+        second_insight = insights[1]
+        if expense_total > 0:
+            self.assertTrue(second_insight.startswith('Maior categoria de despesas: '))
+            self.assertIn(' em R$ ', second_insight)
+        else:
+            self.assertEqual(second_insight, 'Não há despesas registradas no período selecionado.')
+
+        if net > 0:
+            self.assertEqual(len(insights), 3)
+            self.assertRegex(insights[2], r'^Pressão tributária estimada: \d+\.\d{2}% da receita bruta\.$')
+        else:
+            self.assertEqual(len(insights), 2)
 
 
 if __name__ == '__main__':
