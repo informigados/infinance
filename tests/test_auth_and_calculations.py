@@ -60,6 +60,20 @@ class AuthAndCalculationsTest(unittest.TestCase):
             follow_redirects=False,
         )
 
+    def test_set_csrf_sets_session_token(self):
+        token = 'csrf-test-coverage'
+        returned = self.set_csrf(token)
+        self.assertEqual(returned, token)
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess.get('_csrf_token'), token)
+
+    def test_login_with_valid_credentials_helper(self):
+        csrf_token = self.set_csrf('csrf-helper-ok')
+        response = self.login_with_valid_credentials(csrf_token)
+        self.assertEqual(response.status_code, 302)
+        location = response.headers.get('Location', '')
+        self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
+
     def test_login_success(self):
         csrf_token = self.set_csrf('csrf-auth-ok')
         login_response = self.login_with_valid_credentials(csrf_token)
@@ -116,6 +130,40 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 'username': self.username,
                 'password': self.password,
                 'next': 'https://evil.example/steal',
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        location = response.headers.get('Location', '')
+        self.assertNotIn('evil.example', location)
+        self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
+
+    def test_login_rejects_protocol_relative_open_redirect(self):
+        csrf_token = self.set_csrf('csrf-auth-open-redirect-proto-relative')
+        response = self.client.post(
+            '/login',
+            data={
+                '_csrf_token': csrf_token,
+                'username': self.username,
+                'password': self.password,
+                'next': '//evil.example/steal',
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        location = response.headers.get('Location', '')
+        self.assertNotIn('evil.example', location)
+        self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
+
+    def test_login_rejects_credential_url_open_redirect(self):
+        csrf_token = self.set_csrf('csrf-auth-open-redirect-credentials')
+        response = self.client.post(
+            '/login',
+            data={
+                '_csrf_token': csrf_token,
+                'username': self.username,
+                'password': self.password,
+                'next': 'http://user:pass@evil.example/steal',
             },
             follow_redirects=False,
         )
@@ -236,7 +284,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertIn(non_existent_forced_result['annex'], {'III', 'V'})
 
     def test_build_monthly_report_data_includes_insights(self):
-        month = datetime.now().strftime('%Y-%m')
+        month = '2024-01'
         with app.app_context():
             data = build_monthly_report_data(month)
         self.assertEqual(data.get('month'), month)
