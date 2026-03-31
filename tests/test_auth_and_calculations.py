@@ -586,6 +586,51 @@ class AuthAndCalculationsTest(unittest.TestCase):
         result = calculate_das_advanced(10_000.0, 200_000.0, 20_000.0, 'III_V', forced_annex=None)
         self.assertIsNone(result.get('error'))
 
+    def test_calculate_das_advanced_invalid_forced_annex_does_not_corrupt_valid_flow(self):
+        monthly_revenue = 12_345.67
+        rbt12 = 300_000.0
+        payroll_12m = 90_000.0
+        annex_mode = 'III_V'
+
+        baseline_valid_result = calculate_das_advanced(
+            monthly_revenue,
+            rbt12,
+            payroll_12m,
+            annex_mode,
+            forced_annex=None,
+        )
+        self.assertIsNone(baseline_valid_result.get('error'))
+        self.assertIn('estimated_das', baseline_valid_result)
+        self.assertIn('effective_rate', baseline_valid_result)
+
+        invalid_result = calculate_das_advanced(
+            monthly_revenue,
+            rbt12,
+            payroll_12m,
+            annex_mode,
+            forced_annex='INVALID',
+        )
+        self.assertEqual(invalid_result.get('error'), 'Anexo forçado inválido. Use I, II, III, IV ou V.')
+        for key in self.CALCULATION_RESULT_KEYS:
+            self.assertNotIn(key, invalid_result)
+
+        rerun_valid_result = calculate_das_advanced(
+            monthly_revenue,
+            rbt12,
+            payroll_12m,
+            annex_mode,
+            forced_annex=None,
+        )
+        self.assertIsNone(rerun_valid_result.get('error'))
+        self._assert_results_equal(
+            baseline_valid_result,
+            rerun_valid_result,
+            'rerun_valid_result',
+        )
+        self.assertEqual(rerun_valid_result.get('error'), baseline_valid_result.get('error'))
+        self.assertEqual(rerun_valid_result.get('annex'), baseline_valid_result.get('annex'))
+        self.assertEqual(rerun_valid_result.get('uses_factor_r'), baseline_valid_result.get('uses_factor_r'))
+
     def test_calculate_das_advanced_accepts_all_valid_forced_annex_values(self):
         for forced_annex in self.VALID_FORCED_ANNEX_VALUES:
             with self.subTest(forced_annex=forced_annex):
