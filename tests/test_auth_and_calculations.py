@@ -21,6 +21,7 @@ from werkzeug.security import generate_password_hash
 
 class AuthAndCalculationsTest(unittest.TestCase):
     EXCLUDED_COMPARISON_KEYS = {'error', 'annex', 'uses_factor_r', 'annex_mode'}
+    TRANSACTION_RESULT_KEYS = ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate')
     INVALID_FORCED_ANNEX_VALUES = [
         'INVALID',
         'VI',
@@ -55,6 +56,8 @@ class AuthAndCalculationsTest(unittest.TestCase):
         bootstrap_database()
         cls.username = 'qa_auth_user'
         cls.password = 'QaAuth@123'
+        cls.admin_username = 'qa_auth_admin'
+        cls.admin_password = 'QaAdmin@123'
         with app.app_context():
             existing = get_user_by_username(cls.username)
             if existing is None:
@@ -74,6 +77,23 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 )
             refreshed = get_user_by_username(cls.username)
             cls.user_id = int(refreshed['id'])
+
+            admin_existing = get_user_by_username(cls.admin_username)
+            if admin_existing is None:
+                execute(
+                    '''INSERT INTO users (username, password_hash, role, must_change_password, created_at)
+                       VALUES (?, ?, 'admin', 0, ?)''',
+                    (
+                        cls.admin_username,
+                        generate_password_hash(cls.admin_password),
+                        datetime.now(timezone.utc).isoformat(timespec='seconds'),
+                    ),
+                )
+            else:
+                execute(
+                    'UPDATE users SET password_hash = ?, role = ?, must_change_password = 0 WHERE id = ?',
+                    (generate_password_hash(cls.admin_password), 'admin', int(admin_existing['id'])),
+                )
 
     def setUp(self):
         self.client = app.test_client()
@@ -138,16 +158,27 @@ class AuthAndCalculationsTest(unittest.TestCase):
             sess['_csrf_token'] = token
         return token
 
+    def login_with_credentials(self, csrf_token: str, username: str, password: str, next_value: str | None = None):
+        payload = {
+            '_csrf_token': csrf_token,
+            'username': username,
+            'password': password,
+        }
+        if next_value is not None:
+            payload['next'] = next_value
+        return self.client.post('/login', data=payload, follow_redirects=False)
+
     def login_with_valid_credentials(self, csrf_token: str):
-        return self.client.post(
-            '/login',
-            data={
-                '_csrf_token': csrf_token,
-                'username': self.username,
-                'password': self.password,
-            },
-            follow_redirects=False,
-        )
+        return self.login_with_credentials(csrf_token, self.username, self.password)
+
+    def _assert_transaction_values_not_nan(self, result_dict: dict, check_finite: bool = False, context: str = '') -> None:
+        msg_prefix = f'{context}: ' if context else ''
+        for key in self.TRANSACTION_RESULT_KEYS:
+            self.assertIn(key, result_dict, msg=f"{msg_prefix}missing key '{key}'")
+            value = result_dict[key]
+            self.assertFalse(isnan(value), msg=f'{msg_prefix}{key} should not be NaN')
+            if check_finite:
+                self.assertTrue(isfinite(value), msg=f'{msg_prefix}{key} should remain finite')
 
     def test_set_csrf_sets_session_token(self):
         token = 'csrf-test-coverage'
@@ -174,6 +205,18 @@ class AuthAndCalculationsTest(unittest.TestCase):
             self.assertEqual(sess.get('user_id'), self.user_id)
             self.assertEqual(sess.get('username'), self.username)
             self.assertEqual(sess.get('role'), 'viewer')
+
+    def test_login_admin_role(self):
+        csrf_token = self.set_csrf('csrf-auth-admin')
+        login_response = self.login_with_credentials(csrf_token, self.admin_username, self.admin_password)
+        self.assertEqual(login_response.status_code, 302)
+        location = login_response.headers.get('Location', '')
+        self.assertTrue(location.endswith('/') or location.endswith('/dashboard'))
+
+        with self.client.session_transaction() as sess:
+            self.assertIsNotNone(sess.get('user_id'))
+            self.assertEqual(sess.get('username'), self.admin_username)
+            self.assertEqual(sess.get('role'), 'admin')
 
     def test_logout_flow(self):
         csrf_token = self.set_csrf('csrf-auth-logout')
@@ -268,10 +311,11 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 'username': self.username,
                 'password': self.password,
             },
-            follow_redirects=False,
+            follow_redirects=True,
         )
-        self.assertEqual(response.status_code, 302)
-        self.assertIn('/login', response.headers.get('Location', ''))
+        self.assertEqual(response.status_code, 200)
+        response_text = response.data.decode('utf-8').casefold()
+        self.assertIn('sessão expirou', response_text)
 
         with self.client.session_transaction() as sess:
             self.assertIsNone(sess.get('user_id'))
@@ -352,10 +396,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
     def test_calculate_transaction_at_float_max_boundary(self):
         # Scenario 1: calculations exactly at float max boundary.
         result = calculate_transaction(sys.float_info.max, 'PJ', True, 1.0, 0.0)
-        for key in ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate'):
-            value = result[key]
-            self.assertFalse(isnan(value), msg=f'{key} should not be NaN at float max boundary')
-            self.assertTrue(isfinite(value), msg=f'{key} should remain finite at float max boundary')
+        self._assert_transaction_values_not_nan(result, check_finite=True, context='float max boundary')
         self.assertEqual(result['gross'], sys.float_info.max)
         self.assertEqual(result['invoice_tax'], sys.float_info.max)
         self.assertEqual(result['pf_tax'], 0.0)
@@ -367,9 +408,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
         # Here we assert the implementation doesn't return NaN values.
         overflowing_gross = sys.float_info.max * 0.75
         overflow_result = calculate_transaction(overflowing_gross, 'PJ', True, 1.5, 0.0)
-        for key in ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate'):
-            value = overflow_result[key]
-            self.assertFalse(isnan(value), msg=f'{key} should not be NaN when overflow would occur')
+        self._assert_transaction_values_not_nan(overflow_result, context='overflow-prone multiplication')
         self.assertEqual(overflow_result['gross'], overflowing_gross)
 
     def test_calculate_transaction_at_float_max_boundary_realistic_rate(self):
@@ -377,10 +416,11 @@ class AuthAndCalculationsTest(unittest.TestCase):
         invoice_rate = 0.2
         result = calculate_transaction(gross, 'PJ', True, invoice_rate, 0.0)
 
-        for key in ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate'):
-            value = result[key]
-            self.assertFalse(isnan(value), msg=f'{key} should not be NaN at float max boundary (realistic rate)')
-            self.assertTrue(isfinite(value), msg=f'{key} should remain finite at float max boundary (realistic rate)')
+        self._assert_transaction_values_not_nan(
+            result,
+            check_finite=True,
+            context='float max boundary (realistic rate)',
+        )
 
         self.assertGreater(result['gross'], 0.0)
         self.assertGreater(result['invoice_tax'], 0.0)
@@ -494,11 +534,12 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertIsNone(result.get('error'))
 
     def test_build_monthly_report_data_includes_insights(self):
-        month = '2099-01'
         with app.app_context():
             db = get_db()
             with self.savepoint(db, 'monthly_insights_test', rollback_on_success=True):
-                now = datetime.now(timezone.utc).isoformat(timespec='seconds')
+                now_dt = datetime.now(timezone.utc)
+                month = now_dt.strftime('%Y-%m')
+                now = now_dt.isoformat(timespec='seconds')
                 client_cursor = db.execute(
                     'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
                     ('Cliente Insights Janeiro', 'PJ', 'Cliente de teste para insights', now),
@@ -533,10 +574,10 @@ class AuthAndCalculationsTest(unittest.TestCase):
                         1000.0,
                         'PJ',
                         1,
-                        'NF-INSIGHTS-2099-01',
+                        f'NF-INSIGHTS-{month}',
                         'Transação de teste para insights',
                         0.0,
-                        '2099-01-15',
+                        f'{month}-15',
                         'recebido',
                         'Teste determinístico',
                         now,
@@ -550,7 +591,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
                         'Despesa de teste para insights',
                         'marketing',
                         400.0,
-                        '2099-01-20',
+                        f'{month}-20',
                         0,
                         'Teste determinístico',
                         now,
@@ -612,6 +653,26 @@ class AuthAndCalculationsTest(unittest.TestCase):
 
             post_rollback_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
             self.assertEqual(post_rollback_count, 0)
+
+    def test_savepoint_context_manager_commit(self):
+        with app.app_context():
+            db = get_db()
+            marker = f'Cliente_Savepoint_Commit_{uuid.uuid4()}'
+            with self.savepoint(db, 'savepoint_commit_cleanup', rollback_on_success=True):
+                pre_existing = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
+                self.assertEqual(pre_existing, 0)
+
+                with self.savepoint(db, 'monthly_insights_commit_test'):
+                    now = datetime.now(timezone.utc).isoformat(timespec='seconds')
+                    db.execute(
+                        'INSERT INTO clients (name, person_type, notes, created_at) VALUES (?, ?, ?, ?)',
+                        (marker, 'PJ', 'Cliente temporário para testar commit de savepoint', now),
+                    )
+                    in_savepoint_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
+                    self.assertEqual(in_savepoint_count, 1)
+
+                post_commit_count = db.execute('SELECT COUNT(*) FROM clients WHERE name = ?', (marker,)).fetchone()[0]
+                self.assertEqual(post_commit_count, 1)
 
 
 if __name__ == '__main__':
