@@ -271,20 +271,20 @@ class AuthAndCalculationsTest(unittest.TestCase):
         self.assertAlmostEqual(result['effective_rate'], expected_effective_rate, places=2)
 
     def test_calculate_das_advanced_zero_revenue(self):
-        zero_revenue_result = calculate_das_advanced(5000.0, 0.0, 1000.0, 'III_V')
-        zero_revenue_error = zero_revenue_result.get('error')
-        self.assertIsNotNone(zero_revenue_error)
+        result = calculate_das_advanced(5000.0, 0.0, 1000.0, 'III_V')
+        error = result.get('error')
+        self.assertIsNotNone(error)
         self.assertEqual(
-            zero_revenue_error,
+            error,
             'Informe uma receita bruta acumulada dos últimos 12 meses (RBT12) maior que zero.',
         )
 
     def test_calculate_das_advanced_over_limit(self):
-        over_limit_result = calculate_das_advanced(5000.0, 4_900_000.0, 100_000.0, 'III_V')
-        over_limit_error = over_limit_result.get('error')
-        self.assertIsNotNone(over_limit_error)
+        result = calculate_das_advanced(5000.0, 4_900_000.0, 100_000.0, 'III_V')
+        error = result.get('error')
+        self.assertIsNotNone(error)
         self.assertEqual(
-            over_limit_error,
+            error,
             'RBT12 acima de R$ 4.800.000,00. O cálculo simplificado aqui não cobre esse regime.',
         )
 
