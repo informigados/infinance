@@ -3,7 +3,7 @@ import contextlib
 import re
 import sys
 import uuid
-from math import isfinite, isnan
+from math import isfinite, isinf, isnan
 from datetime import datetime, timezone
 
 from app import (
@@ -21,6 +21,13 @@ from werkzeug.security import generate_password_hash
 
 class AuthAndCalculationsTest(unittest.TestCase):
     CSRF_EXPIRED_MESSAGE = 'sessão expirou'
+    CALCULATION_RESULT_KEYS = (
+        'annex',
+        'nominal_rate',
+        'effective_rate',
+        'estimated_das',
+        'factor_r',
+    )
     EXCLUDED_COMPARISON_KEYS = {'error', 'annex', 'uses_factor_r'}
     EXCLUDED_COMPARISON_KEYS_WITH_MODE = EXCLUDED_COMPARISON_KEYS | {'annex_mode'}
     TRANSACTION_RESULT_KEYS = ('gross', 'invoice_tax', 'pf_tax', 'total_tax', 'net', 'effective_rate')
@@ -113,6 +120,9 @@ class AuthAndCalculationsTest(unittest.TestCase):
         The context always RELEASEs the savepoint. It ROLLBACKs when:
         1) an exception is raised inside the block, or
         2) `rollback_on_success` is True.
+
+        RELEASE is always executed in the `finally` block, even when
+        rollback happens, to guarantee consistent cleanup semantics.
         """
         safe_name = self._validate_savepoint_name(name)
         db.execute(self._build_savepoint_sql('SAVEPOINT', safe_name))
@@ -199,13 +209,18 @@ class AuthAndCalculationsTest(unittest.TestCase):
     def login_with_valid_credentials(self, csrf_token: str):
         return self.login_with_credentials(csrf_token, self.username, self.password)
 
-    def _assert_transaction_values_valid(self, result_dict: dict, check_finite: bool = False, context: str = '') -> None:
+    def _assert_transaction_values_valid(
+        self,
+        result_dict: dict,
+        require_finite_values: bool = False,
+        context: str = '',
+    ) -> None:
         msg_prefix = f'{context}: ' if context else ''
         for key in self.TRANSACTION_RESULT_KEYS:
             self.assertIn(key, result_dict, msg=f"{msg_prefix}missing key '{key}'")
             value = result_dict[key]
             self.assertFalse(isnan(value), msg=f'{msg_prefix}{key} should not be NaN')
-            if check_finite:
+            if require_finite_values:
                 self.assertTrue(isfinite(value), msg=f'{msg_prefix}{key} should remain finite')
 
     def test_set_csrf_sets_session_token(self):
@@ -424,7 +439,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
     def test_calculate_transaction_at_float_max_boundary(self):
         # Scenario 1: calculations exactly at float max boundary.
         result = calculate_transaction(sys.float_info.max, 'PJ', True, 1.0, 0.0)
-        self._assert_transaction_values_valid(result, check_finite=True, context='float max boundary')
+        self._assert_transaction_values_valid(result, require_finite_values=True, context='float max boundary')
         self.assertEqual(result['gross'], sys.float_info.max)
         self.assertEqual(result['invoice_tax'], sys.float_info.max)
         self.assertEqual(result['pf_tax'], 0.0)
@@ -438,6 +453,19 @@ class AuthAndCalculationsTest(unittest.TestCase):
         overflow_result = calculate_transaction(overflowing_gross, 'PJ', True, 1.5, 0.0)
         self._assert_transaction_values_valid(overflow_result, context='overflow-prone multiplication')
         self.assertEqual(overflow_result['gross'], overflowing_gross)
+        # For PJ with invoice, PF tax should remain zero and total tax should
+        # match the invoice tax component.
+        self.assertEqual(overflow_result['pf_tax'], 0.0)
+        self.assertEqual(overflow_result['total_tax'], overflow_result['invoice_tax'])
+        # Overflow strategy consistency:
+        # - taxes remain non-negative and may become +inf;
+        # - net stays <= gross (can become -inf when tax overflows);
+        # - effective_rate remains non-negative (finite or +inf).
+        self.assertTrue(isinf(overflow_result['invoice_tax']) or overflow_result['invoice_tax'] >= 0.0)
+        self.assertTrue(isinf(overflow_result['total_tax']) or overflow_result['total_tax'] >= 0.0)
+        self.assertLessEqual(overflow_result['net'], overflow_result['gross'])
+        self.assertTrue(isinf(overflow_result['net']) or overflow_result['net'] >= 0.0)
+        self.assertTrue(isinf(overflow_result['effective_rate']) or overflow_result['effective_rate'] >= 0.0)
 
     def test_calculate_transaction_at_float_max_boundary_realistic_rate(self):
         gross = sys.float_info.max
@@ -446,7 +474,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
 
         self._assert_transaction_values_valid(
             result,
-            check_finite=True,
+            require_finite_values=True,
             context='float max boundary (realistic rate)',
         )
 
@@ -549,13 +577,7 @@ class AuthAndCalculationsTest(unittest.TestCase):
                 self.assertIsNotNone(result.get('error'))
                 self.assertEqual(result.get('error'), 'Anexo forçado inválido. Use I, II, III, IV ou V.')
                 # Invalid forced annex must short-circuit and avoid calculation payload fields.
-                for key in (
-                    'annex',
-                    'nominal_rate',
-                    'effective_rate',
-                    'estimated_das',
-                    'factor_r',
-                ):
+                for key in self.CALCULATION_RESULT_KEYS:
                     self.assertNotIn(key, result)
 
     def test_calculate_das_advanced_none_forced_annex_is_allowed(self):
