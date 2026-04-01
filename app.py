@@ -2513,6 +2513,86 @@ def is_loopback_host(host: str) -> bool:
     return clean_host in {'127.0.0.1', 'localhost', '::1'}
 
 
+def supports_ansi() -> bool:
+    disabled = (os.getenv('NO_COLOR') or '').strip()
+    if disabled:
+        return False
+    explicit_disable = (os.getenv('INFINANCE_NO_ANSI') or '').strip().lower()
+    if explicit_disable in {'1', 'true', 'yes', 'on'}:
+        return False
+    term = (os.getenv('TERM') or '').strip().lower()
+    if term == 'dumb':
+        return False
+    return bool(getattr(sys.stdout, 'isatty', lambda: False)())
+
+
+def resolve_banner_style() -> str:
+    requested = (os.getenv('INFINANCE_BANNER_STYLE') or 'neon').strip().lower()
+    if requested in {'neon', 'metal'}:
+        return requested
+    return 'neon'
+
+
+def print_startup_banner(host: str, port: int, mode_label: str, style: str = 'neon') -> None:
+    title_lines = [
+        '██╗███╗   ██╗███████╗██╗███╗   ██╗ █████╗ ███╗   ██╗ ██████╗███████╗',
+        '██║████╗  ██║██╔════╝██║████╗  ██║██╔══██╗████╗  ██║██╔════╝██╔════╝',
+        '██║██╔██╗ ██║█████╗  ██║██╔██╗ ██║███████║██╔██╗ ██║██║     █████╗  ',
+        '██║██║╚██╗██║██╔══╝  ██║██║╚██╗██║██╔══██║██║╚██╗██║██║     ██╔══╝  ',
+        '██║██║ ╚████║██║     ██║██║ ╚████║██║  ██║██║ ╚████║╚██████╗███████╗',
+        '╚═╝╚═╝  ╚═══╝╚═╝     ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝╚══════╝',
+    ]
+    style_name = style if style in {'neon', 'metal'} else 'neon'
+    subtitle = (
+        'Sistema Financeiro e Fiscal // Pixel Neon'
+        if style_name == 'neon'
+        else 'Sistema Financeiro e Fiscal // Retro Metal'
+    )
+    style_badge = f'Estilo: {style_name.upper()}'
+    launch_url = f'http://{host}:{port}/'
+    info_left = f'Modo: {mode_label}'
+    info_right = f'URL: {launch_url}'
+    width = max(
+        len(max(title_lines, key=len)),
+        len(subtitle) + 2,
+        len(style_badge) + 2,
+        len(info_left) + len(info_right) + 5,
+    )
+    width = max(width, 78)
+
+    ansi = supports_ansi()
+    c_reset = '\033[0m' if ansi else ''
+    if style_name == 'metal':
+        c_border = '\033[37m' if ansi else ''
+        c_title = '\033[97m' if ansi else ''
+        c_sub = '\033[37m' if ansi else ''
+        c_meta = '\033[90m' if ansi else ''
+        c_shadow = '\033[90m' if ansi else ''
+        shadow_char = '▓'
+    else:
+        # Neon theme: white solid text with green contour/shadow.
+        c_border = '\033[92m' if ansi else ''
+        c_title = '\033[97m' if ansi else ''
+        c_sub = '\033[92m' if ansi else ''
+        c_meta = '\033[90m' if ansi else ''
+        c_shadow = '\033[32m' if ansi else ''
+        shadow_char = '░'
+
+    def pad(text: str) -> str:
+        return text + (' ' * (width - len(text)))
+
+    print()
+    print(f"{c_border}╔{'═' * (width + 2)}╗{c_reset}")
+    for line in title_lines:
+        print(f"{c_border}║{c_reset} {c_title}{pad(line)}{c_reset} {c_border}║{c_shadow}{shadow_char}{c_reset}")
+    print(f"{c_border}║{c_reset} {c_sub}{pad(subtitle)}{c_reset} {c_border}║{c_shadow}{shadow_char}{c_reset}")
+    print(f"{c_border}║{c_reset} {c_sub}{pad(style_badge)}{c_reset} {c_border}║{c_shadow}{shadow_char}{c_reset}")
+    print(f"{c_border}║{c_reset} {c_meta}{pad(f'{info_left}   {info_right}')}{c_reset} {c_border}║{c_shadow}{shadow_char}{c_reset}")
+    print(f"{c_border}╚{'═' * (width + 2)}╝{c_shadow}{shadow_char}{c_reset}")
+    print(f"{c_shadow} {shadow_char * (width + 4)}{c_reset}")
+    print()
+
+
 if __name__ == '__main__':
     host = os.getenv('INFINANCE_HOST', '127.0.0.1')
     allow_remote_raw = os.getenv('INFINANCE_ALLOW_REMOTE', '0').strip().lower()
@@ -2537,6 +2617,8 @@ if __name__ == '__main__':
     except ValueError:
         waitress_threads = 8
     waitress_threads = max(waitress_threads, 4)
+    mode_label = 'PRODUÇÃO (Waitress)' if waitress_serve is not None else 'DESENVOLVIMENTO (Flask)'
+    print_startup_banner(host, port, mode_label, resolve_banner_style())
 
     if waitress_serve is not None:
         # Reduz ruído no terminal (ex.: "Task queue depth is 1") sem afetar logs de erro.
