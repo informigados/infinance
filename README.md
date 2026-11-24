@@ -1,4 +1,4 @@
-﻿# INFinance 💚
+﻿# 📊 INFinance
 
 Plataforma premium de controle **financeiro e fiscal** para agências e empresas brasileiras, com foco em operação real: entradas, despesas, relatórios, simulação tributária e gestão de DAS/Fator R.
 
@@ -291,10 +291,10 @@ O fechamento fiscal/oficial deve ser validado com a contabilidade responsável.
 <a id="autores"></a>
 ## 👥 Autores
 
+- [Alex Brito](https://github.com/alexbritodev)
 - [INformigados](https://github.com/informigados)
-- [Alex Brito](https://github.com/AlexBritoDEV)
 
 <a id="licenca"></a>
 ## 📄 Licença
 
-Este projeto está licenciado sob a Licença MIT. Consulte [`LICENSE`](LICENSE) para obter detalhes.
+Este projeto está licenciado sob a [Licença MIT](LICENSE).
