@@ -10,6 +10,7 @@ Plataforma premium de controle **financeiro e fiscal** para agências e empresas
 [![Exportações](https://img.shields.io/badge/Exportações-CSV%20%7C%20XLSX%20%7C%20TXT%20%7C%20PDF-0F766E)](#exportacoes-inteligentes)
 [![Status](https://img.shields.io/badge/Status-Produção-16A34A)](#visao-geral)
 [![Licença](https://img.shields.io/badge/Licença-MIT-16A34A)](#licenca)
+[![DeepWiki](docs/assets/deepwiki.svg)](https://deepwiki.com/informigados/infinance)
 
 ## 📚 Sumário
 
